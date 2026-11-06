@@ -25,6 +25,8 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/pyproject.toml /app/uv.lock /app/README.md ./
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN mkdir -p /app/data && chown -R zasky:zasky /app
 
 USER zasky

@@ -51,6 +51,36 @@
 - Next: observe one real owner message in the Discord room, then proceed to
   Phase 2 (durable domain schema, Alembic, owner access boundary, backup/restore).
 
+## 2026-11-06 — Phase 2: durable schema, migrations and recovery
+
+- Added the complete MVP SQLAlchemy model set: owner configuration, goals,
+  commitments, fixed events, placements, tasks, day plans/items, proposals,
+  scope revisions, reminders, audit events, model usage, timebox check-ins and
+  the Switch connection/event ledgers.
+- Added a tested Alembic baseline migration (`b23394c5a105`) with indexes,
+  checks, foreign keys, a partial unique placement index, and append-only
+  triggers on `audit_events`.
+- Added owner-singleton seeding from validated settings, optimistic scope
+  revision repositories, append-only audit writes and schema-revision checks.
+- Added manual SQLite online backup, SHA-256 sidecar, restore verification
+  (`integrity_check` + `foreign_key_check`) and a retention helper. Encrypted
+  backup automation remains intentionally deferred.
+- Added the local maintenance CLI (`zasky-maintenance`) for migrate/status/
+  backup/restore/prune.
+- Tests: **46 passed**; `ruff check .` clean; `mypy src` clean.
+- Migration evidence: upgrade → `b23394c5a105`; `alembic check` reports no new
+  operations; downgrade to base and re-upgrade both succeeded.
+- Staging evidence: Phase 1 ops DB backed up, fresh Phase 2 DB migrated, owner
+  config seeded once, container rebuilt and `/health/ready` returns
+  `{"status":"ready","database":"ok","switch":"connected","schema":"current"}`.
+- Restore drill: backup `zasky-20261106T100821Z.db` restored to
+  `/tmp/zasky-restore-test.db`; integrity `ok`, foreign-key violations `0`,
+  17 tables, owner config present.
+- Known issue unchanged: the Discord room is still `channel_public`; the live
+  owner round-trip is still pending.
+- Next: Phase 3 domain services, seven strict tools, proposal lifecycle and
+  deterministic planner.
+
 ## Checkpoint template
 
 ```text

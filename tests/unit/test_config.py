@@ -46,3 +46,44 @@ def test_safe_summary_has_no_secret_or_private_ids(settings: Settings) -> None:
     assert "room-1" not in text
     assert "@owner:test" not in text
     assert summary["app_env"] == "test"
+
+
+def test_invalid_timezone_is_rejected(settings: Settings) -> None:
+    data = settings.model_dump()
+    data["timezone"] = "Mars/Olympus_Mons"
+    with pytest.raises(ValidationError):
+        Settings(**data)
+
+
+def test_daily_limit_is_fixed_at_three(settings: Settings) -> None:
+    data = settings.model_dump()
+    data["daily_task_limit"] = 2
+    with pytest.raises(ValidationError):
+        Settings(**data)
+
+
+def test_week_start_must_be_a_weekday(settings: Settings) -> None:
+    data = settings.model_dump()
+    data["week_start_day"] = "funday"
+    with pytest.raises(ValidationError):
+        Settings(**data)
+
+
+def test_availability_overlap_is_rejected(settings: Settings) -> None:
+    data = settings.model_dump()
+    data["weekly_availability_json"] = (
+        '{"monday": [{"start": "09:00", "end": "12:00"}, '
+        '{"start": "11:00", "end": "13:00"}]}'
+    )
+    with pytest.raises(ValidationError):
+        Settings(**data)
+
+
+def test_availability_accepts_valid_windows(settings: Settings) -> None:
+    data = settings.model_dump()
+    data["weekly_availability_json"] = (
+        '{"monday": [{"start": "09:00", "end": "12:00"}, '
+        '{"start": "13:00", "end": "17:00"}]}'
+    )
+    parsed = Settings(**data)
+    assert "monday" in parsed.weekly_availability_json

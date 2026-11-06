@@ -32,6 +32,7 @@ dev = [
 
 [project.scripts]
 zasky = "zasky.__main__:main"
+zasky-maintenance = "zasky.ops.maintenance:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/zasky"]

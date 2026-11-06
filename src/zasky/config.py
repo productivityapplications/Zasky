@@ -7,13 +7,40 @@ in the CLI, never by value.
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import time
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse, urlunparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_WEEKDAYS = {
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+}
+
+
+def _parse_hhmm(value: str) -> time:
+    parts = value.split(":")
+    if len(parts) != 2 or len(parts[0]) != 2 or len(parts[1]) != 2:
+        raise ValueError("time must be HH:MM")
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError as exc:
+        raise ValueError("time must be HH:MM") from exc
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError("time must be between 00:00 and 23:59")
+    return time(hour, minute)
 
 
 class Settings(BaseSettings):
@@ -46,6 +73,21 @@ class Settings(BaseSettings):
 
     switch_reconnect_min_seconds: float = Field(default=1.0, ge=0.05, le=60.0)
     switch_reconnect_max_seconds: float = Field(default=30.0, ge=0.1, le=300.0)
+
+    # Planning profile. Defaults are safe staging values; the operator confirms
+    # or overrides them during intake.
+    timezone: str = "Africa/Lagos"
+    capacity_pct: int = Field(default=65, ge=60, le=70)
+    week_start_day: str = "monday"
+    daily_task_limit: int = Field(default=3, ge=1, le=3)
+    transition_buffer_min: int = Field(default=10, ge=0)
+    morning_prep_min: int = Field(default=30, ge=0)
+    commute_buffer_min: int = Field(default=0, ge=0)
+    weekly_availability_json: str = "{}"
+    morning_prompt_time: str = "07:00"
+    evening_prompt_time: str = "20:00"
+    reminders_enabled: bool = False
+    timebox_checkins_enabled: bool = False
 
     @field_validator("log_level")
     @classmethod
@@ -108,6 +150,67 @@ class Settings(BaseSettings):
             raise ValueError("must not be empty")
         return cleaned
 
+    @field_validator("timezone")
+    @classmethod
+    def _valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("must be a valid IANA timezone") from exc
+        return value
+
+    @field_validator("week_start_day")
+    @classmethod
+    def _valid_week_start(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in _WEEKDAYS:
+            raise ValueError("must be a weekday name")
+        return normalized
+
+    @field_validator("daily_task_limit")
+    @classmethod
+    def _fixed_daily_limit(cls, value: int) -> int:
+        if value != 3:
+            raise ValueError("must be 3; the daily ceiling is a product invariant")
+        return value
+
+    @field_validator("morning_prompt_time", "evening_prompt_time")
+    @classmethod
+    def _valid_clock_time(cls, value: str) -> str:
+        _parse_hhmm(value)
+        return value
+
+    @field_validator("weekly_availability_json")
+    @classmethod
+    def _valid_availability(cls, value: str) -> str:
+        try:
+            parsed: Any = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("must be valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("must be a JSON object keyed by weekday")
+        for day, windows in parsed.items():
+            if not isinstance(day, str) or day.lower() not in _WEEKDAYS:
+                raise ValueError("unknown weekday in availability")
+            if not isinstance(windows, list):
+                raise ValueError("each weekday must map to a list of windows")
+            parsed_windows: list[tuple[time, time]] = []
+            for window in windows:
+                if not isinstance(window, dict) or set(window) != {"start", "end"}:
+                    raise ValueError("each window needs exactly start and end")
+                start = _parse_hhmm(str(window["start"]))
+                end = _parse_hhmm(str(window["end"]))
+                if end <= start:
+                    raise ValueError("availability end must be after start")
+                parsed_windows.append((start, end))
+            parsed_windows.sort()
+            for previous, current in zip(
+                parsed_windows, parsed_windows[1:], strict=False
+            ):
+                if current[0] < previous[1]:
+                    raise ValueError("availability windows must not overlap")
+        return value
+
     @property
     def resolved_ws_url(self) -> str:
         """Return the agent WebSocket URL, deriving it when not overridden."""
@@ -125,6 +228,9 @@ class Settings(BaseSettings):
             "switch_base_url": self.switch_base_url,
             "health_bind": f"{self.health_bind_host}:{self.health_bind_port}",
             "database": self.database_url,
+            "timezone": self.timezone,
+            "capacity_pct": self.capacity_pct,
+            "week_start_day": self.week_start_day,
             "max_message_chars": self.max_message_chars,
         }
 

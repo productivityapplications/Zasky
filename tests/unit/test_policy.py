@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.fixtures.identities import OWNER_ID, ROOM_ID, STRANGER_ID
 from zasky.access.policy import authorize_message
 from zasky.config import Settings
 from zasky.switch.events import MessageEvent
@@ -7,8 +8,8 @@ from zasky.switch.events import MessageEvent
 
 def make_event(
     *,
-    room_id: str = "room-1",
-    sender: str = "@owner:test",
+    room_id: str = ROOM_ID,
+    sender: str = OWNER_ID,
     addressed: bool = True,
     body: str = "hello",
     sequence: int = 1,
@@ -46,7 +47,7 @@ def test_wrong_room_is_rejected(settings: Settings) -> None:
 
 
 def test_wrong_sender_is_rejected(settings: Settings) -> None:
-    decision = authorize_message(make_event(sender="@stranger:test"), settings)
+    decision = authorize_message(make_event(sender=STRANGER_ID), settings)
     assert decision.allowed is False
     assert decision.reason == "sender_not_owner"
 

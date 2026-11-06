@@ -8,53 +8,20 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, String, event, select, text
+from sqlalchemy import event, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from zasky.config import Settings
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class SwitchConnectionState(Base):
-    __tablename__ = "switch_connection_state"
-
-    agent_id: Mapped[str] = mapped_column(String(80), primary_key=True)
-    connection_id: Mapped[str] = mapped_column(String(80), nullable=False)
-    generation: Mapped[str | None] = mapped_column(String(80))
-    highest_processed_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    protocol_revision: Mapped[str | None] = mapped_column(String(80))
-    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
-
-
-class ProcessedSwitchEvent(Base):
-    __tablename__ = "processed_switch_events"
-
-    agent_id: Mapped[str] = mapped_column(String(80), primary_key=True)
-    event_sequence: Mapped[int] = mapped_column(Integer, primary_key=True)
-    connection_id: Mapped[str] = mapped_column(String(80), nullable=False)
-    room_id: Mapped[str] = mapped_column(String(120), nullable=False)
-    sender_id: Mapped[str | None] = mapped_column(String(240))
-    message_id: Mapped[str | None] = mapped_column(String(240))
-    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
-    processed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
-    correlation_id: Mapped[str] = mapped_column(String(80), nullable=False)
+from zasky.storage.models import Base, ProcessedSwitchEvent, SwitchConnectionState
 
 
 def _serialized(fn: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
@@ -140,6 +107,24 @@ class Database:
             return True
         except Exception:
             return False
+
+    @_serialized
+    async def get_schema_revision(self) -> str | None:
+        try:
+            async with self._engine.connect() as connection:
+                result = await connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                )
+                return result.scalar_one_or_none()
+        except OperationalError:
+            return None
+
+    @asynccontextmanager
+    async def locked_session(self) -> AsyncIterator[AsyncSession]:
+        """A session serialized with the process-wide SQLite lock."""
+        async with self._lock:
+            async with self._session_factory() as session:
+                yield session
 
     @_serialized
     async def get_connection_state(self, agent_id: str) -> SwitchConnectionState | None:
@@ -308,7 +293,3 @@ class Database:
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self._session_factory() as session:
             yield session
-
-
-# Keep a small import used by mypy on some versions.
-_ = asyncio

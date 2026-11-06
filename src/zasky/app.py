@@ -13,7 +13,9 @@ from sqlalchemy.engine import make_url
 from zasky.config import Settings
 from zasky.ops.health import create_health_app
 from zasky.ops.lock import SingleWriterLock
+from zasky.ops.maintenance import head_revision
 from zasky.storage.database import Database
+from zasky.storage.repositories import OwnerConfigRepository
 from zasky.switch.client import SwitchClient
 from zasky.switch.operations import SwitchOperations
 
@@ -38,10 +40,25 @@ class ZaskyApp:
         self._health_server: uvicorn.Server | None = None
         self._health_task: asyncio.Task[None] | None = None
         self._switch_task: asyncio.Task[None] | None = None
+        self.schema_revision: str | None = None
+        self.schema_ready = False
 
     async def start(self) -> None:
         self._lock.acquire()
         await self.db.init()
+        self.schema_revision = await self.db.get_schema_revision()
+        expected = head_revision()
+        self.schema_ready = expected is not None and self.schema_revision == expected
+        if not self.schema_ready:
+            logger.error(
+                "Database schema is not at the migration head",
+                extra={
+                    "component": "app",
+                    "error_code": "SCHEMA_NOT_CURRENT",
+                },
+            )
+        else:
+            await OwnerConfigRepository(self.db).ensure_seeded(self.settings)
         logger.info(
             "Zasky starting",
             extra={"component": "app"},

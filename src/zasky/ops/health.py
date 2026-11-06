@@ -30,13 +30,15 @@ def create_health_app(app: ZaskyApp) -> FastAPI:
     async def ready(response: Response) -> dict[str, str]:
         database_ok = await app.db.healthcheck()
         switch_ok = app.switch.is_ready
-        ready_now = database_ok and switch_ok
+        schema_ok = app.schema_ready
+        ready_now = database_ok and switch_ok and schema_ok
         if not ready_now:
             response.status_code = 503
         return {
             "status": "ready" if ready_now else "not_ready",
             "database": "ok" if database_ok else "unavailable",
             "switch": "connected" if switch_ok else "disconnected",
+            "schema": "current" if schema_ok else "pending",
         }
 
     return health

@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-06  
-**Project status:** Phase 1 implemented and running in local staging; live owner round-trip evidence pending  
-**Current phase:** Phase 1 — Switch-connected chat shell  
-**Next task:** Observe one owner message in the Discord room, fix the room's `channel_public` privacy setting, then start Phase 2.
+**Project status:** Phases 1–2 implemented; live owner round-trip pending  
+**Current phase:** Phase 2 complete — durable schema and recovery foundation  
+**Next task:** Live Discord round-trip evidence, then Phase 3 domain services and planner.
 
 ## Current state
 
@@ -14,9 +14,10 @@
 - Persistent agent instructions: `AGENTS.md`.
 - Operator intake: partially complete. Switch/Discord access, agent registration,
   owner identity, local host and cost caps are verified. OpenAI access, planning
-  inputs, demo data and some planning defaults remain open.
-- Product code: Phase 1 only. No domain tools, planner, model calls or planning
-  data yet.
+  inputs, demo data and the room privacy setting remain open.
+- Product code: Phase 1 transport/echo and Phase 2 durable schema/migrations/
+  recovery foundation. No domain tools or planner yet.
+- Database schema revision: `b23394c5a105`.
 - Reference assets: UI reference image not applicable; no frontend in MVP.
 - Demo video: not produced.
 
@@ -32,38 +33,54 @@
 | Owner participant ID and room ID verified | Yes — exact values in protected env only |
 | OpenAI model/tool capability and spend cap verified | Spend cap recorded; key/model capability pending |
 | VPS, persistent disk, SSH, firewall verified | Deferred by hackathon scope; local staging only |
-| Owner timezone and availability supplied | Pending |
+| Owner timezone and availability supplied | Pending; provisional `Africa/Lagos` seeded |
 | Seed goals/commitments/week tasks supplied | Pending (demo content) |
-| Backup destination/restore procedure validated | Not yet — Phase 2 |
+| Backup destination/restore procedure validated | Yes — manual online backup + restore drill |
 | Preview/staging authority | Local staging only |
 | Production authority | Not granted |
-| Current preview URL | None — local process/container only |
-| Deployed commit | Not yet — Phase 1 checkpoint pending |
-| Current Git commit | Pending commit |
+| Current preview URL | None — local container only |
+| Deployed commit | Phase 2 checkpoint pending |
+| Current Git commit | Phase 2 checkpoint pending |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 33 tests pass; live owner round-trip pending |
+| Unit/integration/E2E evidence | 46 tests pass; live owner round-trip pending |
 | Demo video | Not produced |
 
 ## Phase 1 evidence
 
-- Local Switch 0.31.0 Compose stack is running with the `collab` and `gateway`
+- Local Switch 0.31.0 Compose stack runs with the `collab` and `gateway`
   profiles. Postgres and Gateway are bound to localhost only.
 - Zasky is a registered custom agent in the configured room, owned by the linked
   Discord owner account. Exact IDs are redacted here and held only in
   `/root/Zasky-secrets/zasky.env` (mode `0600`).
 - The temporary registration key was used once and revoked.
-- `/health/live` returns `200`; `/health/ready` returns
-  `{"status":"ready","database":"ok","switch":"connected"}`.
+- `/health/live` returns `200`; the current `/health/ready` returns
+  `{"status":"ready","database":"ok","switch":"connected","schema":"current"}`.
 - Docker image builds. Container runs as uid `10001`, with a read-only root
   filesystem, `CAP_DROP=ALL`, `no-new-privileges`, and a persistent `./data`
   bind mount.
-- Tests: `33 passed`; `ruff check .` clean; `mypy src` clean.
+- Tests: 46 passed; `ruff` clean; `mypy src` clean.
 - The client accepts the deployed Switch envelope (`event`/`data`), answers
   pings, resumes with cursor/generation, rereads context after `gap`, stops on
   `taken_over`, deduplicates event sequences and posts one deterministic echo.
 - **Pending acceptance evidence:** an actual owner message in the Discord room
   and Zasky's reply in the same room.
+
+## Phase 2 evidence
+
+- 16 domain/operational tables plus `alembic_version` created by migration
+  `b23394c5a105`.
+- Alembic upgrade, `alembic check`, downgrade-to-base and re-upgrade all passed.
+- `audit_events` has database triggers that reject update and delete.
+- `owner_config` is seeded once from validated settings; singleton and capacity/
+  daily-limit checks are enforced.
+- Manual online backup produced `zasky-20261106T100821Z.db` with SHA-256 sidecar.
+- Restore to `/tmp/zasky-restore-test.db` passed `PRAGMA integrity_check`
+  (`ok`), `PRAGMA foreign_key_check` (0 violations), 17 tables and a present
+  owner config.
+- `zasky-maintenance` supports migrate/status/backup/restore/prune locally.
+- Encrypted backup automation is intentionally deferred; the manual restore
+  proof is the Phase 2 acceptance evidence.
 
 ## Known issues and blockers
 
@@ -72,14 +89,17 @@
    be restricted before Phase 1 acceptance and any demo. Apply
    `@everyone → View Channel = deny` or replace the room with a private one.
 2. **OpenAI:** key, verified Responses model/tool capability and provider data
-   acceptance are still pending. Phase 1 does not need them.
+   acceptance are still pending. Phases 1–3 do not need them.
 3. **Planning inputs:** timezone confirmation, availability, fixed events,
    prep/commute/transition buffers and week-start confirmation are pending.
    Synthetic demo inputs are acceptable if explicitly approved.
 4. **Demo:** synthetic seed content, pronunciation, output permission and a
    Discord capture path are pending.
-5. **Backup:** Phase 2 will implement and prove a manual online SQLite backup and
-   restore drill. Encrypted backup automation is deferred to production scope.
+5. **Live round-trip:** the transport is ready and the agent is in the room, but
+   no owner message has been observed by this running container.
+6. **Phase 1 DB reset:** the Phase 1 operations-only DB was backed up and then
+   replaced by a fresh migrated Phase 2 DB. No domain data existed. The Switch
+   cursor will resume from the server's current position.
 
 ## Intentional hackathon deferrals
 
