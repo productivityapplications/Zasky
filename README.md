@@ -4,6 +4,32 @@ This package is the pre-implementation source of truth for building Zasky with a
 
 > **Zasky doesn't give me discipline. It makes coming back cheap.**
 
+## Implementation status — 2026-11-06
+
+Phase 1 is implemented and running in **local staging** against Switch **0.31.0**.
+The agent is registered as `zasky`, connected to the configured private room, and
+the private health endpoint reports ready. Phase 1 deliberately does **not** use a
+model or the planner yet: it proves the Switch transport, owner/room gate, event
+dedupe, reconnect handling and deterministic echo.
+
+```bash
+# Run directly from the repository (development)
+ZASKY_ENV_FILE=/root/Zasky-secrets/zasky.env uv run zasky
+
+# Or run the containerized local staging service
+docker compose up -d
+docker compose ps
+curl -sS http://127.0.0.1:8099/health/ready
+```
+
+Secrets live outside the repository in `/root/Zasky-secrets/zasky.env` with mode
+`0600`. `.env.example` documents the required names; no real values belong in Git.
+
+Phase 0 is **partially complete**: Switch/Discord access and the owner identity are
+verified, but OpenAI access, planning inputs, demo data and the room's privacy
+setting still need operator confirmation before later phases or Phase 1
+acceptance. See `OPERATOR_INTAKE.md` and `AI_HANDOFF.md`.
+
 ## What this package defines
 
 Zasky is a single-owner, chat-native personal task-manager agent. It lives in a private Discord room through Switch, holds the owner's planning cascade (year → month → week → day), and proposes recovery when the day goes sideways.

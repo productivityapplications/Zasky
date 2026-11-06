@@ -14,6 +14,9 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `SWITCH_CONNECTION_ID` | Yes | Stable connection identifier | Server-only |
 | `SWITCH_ROOM_ID` | Yes | Exact allowed room ID | Server-only/private |
 | `OWNER_SWITCH_PARTICIPANT_ID` | Yes | Exact owner participant ID | Server-only/private |
+| `SWITCH_WS_URL` | No | Explicit WebSocket URL override; normally derived from `SWITCH_BASE_URL` and `SWITCH_AGENT_ID` | Server-only; `ws://` or `wss://` |
+| `SWITCH_RECONNECT_MIN_SECONDS` | No | Initial reconnect backoff; default 1 | Bounded positive number |
+| `SWITCH_RECONNECT_MAX_SECONDS` | No | Maximum reconnect backoff; default 30 | Bounded positive number |
 | `OPENAI_API_KEY` | Yes for model | Responses API credential | Secret |
 | `OPENAI_MODEL` | Yes for model | Verified supported model ID | Server-only |
 | `OPENAI_MAX_INPUT_TOKENS` | Yes | Maximum constructed request input tokens; cap context before cost reservation | Positive bounded integer |

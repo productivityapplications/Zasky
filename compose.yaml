@@ -1,0 +1,24 @@
+services:
+  zasky:
+    build:
+      context: .
+    container_name: zasky
+    restart: unless-stopped
+    # Local staging only. Host networking lets Zasky reach a Switch server
+    # bound to 127.0.0.1:8000 on this host without exposing a public port.
+    network_mode: host
+    env_file:
+      - ${ZASKY_ENV_FILE:-/root/Zasky-secrets/zasky.env}
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/data/zasky.db
+      HEALTH_BIND_HOST: 127.0.0.1
+      HEALTH_BIND_PORT: 8099
+    volumes:
+      - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

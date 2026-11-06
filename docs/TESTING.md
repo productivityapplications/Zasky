@@ -47,6 +47,27 @@ Test pure domain behavior without Switch or a model:
 - Secrets absent from logs, prompt, database, audit and demo.
 - Host ports/firewall expose no public DB or Zasky API.
 
+## Phase 1 evidence — 2026-11-06
+
+```bash
+uv run pytest -q                 # 33 passed
+uv run ruff check .              # clean
+uv run mypy src                  # clean
+docker build -t zasky:phase1 .   # success
+docker compose up -d             # container healthy
+curl -sS http://127.0.0.1:8099/health/ready
+# {"status":"ready","database":"ok","switch":"connected"}
+```
+
+The automated suite covers event parsing, owner/room/addressed filtering,
+duplicate sequences, heartbeat pong, gap context reread, reconnect cursor/
+generation, `taken_over`, database state/ledger behavior, configuration
+validation, health responses and the single-writer lock.
+
+Still pending for Phase 1 acceptance: one real owner message in the private
+Discord room and a reply in that room, plus confirmation that the room is
+`channel_private` (or that `@everyone` view access is denied).
+
 ## Acceptance / release gate
 - All required unit and integration suites pass.
 - All critical E2E paths pass against isolated Switch + Discord.

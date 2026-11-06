@@ -5,50 +5,53 @@
 Status values: `PENDING`, `PASS`, `BLOCKED`, `NOT_APPLICABLE`.  
 Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a documented default.
 
+**Intake record date:** 2026-11-06  
+**Scope decision:** local staging only; VPS deployment, encrypted backup automation, full micro-USD reservation ledger and production release are intentionally deferred. See `AI_HANDOFF.md`.
+
 | ID | Input / decision | Required? | Current source / default | Operator answer | Validation evidence | Status | Where used / authorization boundary |
 |---|---|---|---|---|---|---|---|
-| I-01 | Existing repository URL/path and Git access | Critical | Handoff says new build; inspect actual repo |  | Git status/read access | PENDING | Preserve existing work; no force-push |
-| I-02 | Switch hosting URL, workspace and version | Critical | Confirm official current deployment |  | TLS/health/API verification | PENDING | WebSocket/HTTP endpoint; no access bypass |
-| I-03 | Switch agent already registered? | Critical | Register once only if absent |  | Existing agent ID check | PENDING | Never duplicate or overwrite registration |
-| I-04 | Switch registration credential | Critical if agent absent | Store outside this file | Secret stored at: ___ | Registration test, value redacted | PENDING | One-time registration only |
-| I-05 | Switch agent ID and runtime API key | Critical | Exact existing agent identity | ID: ___; secret location: ___ | Authenticated non-mutating check | PENDING | Server-only, never log |
-| I-06 | Switch room ID for Zasky | Critical | One private Discord room |  | Exact room claim/context test | PENDING | Hard allow-list |
-| I-07 | Owner Switch participant ID | Critical | Exact opaque participant ID |  | Owner and negative test identity | PENDING | Exact allow-list before model/data access |
-| I-08 | Discord server/private channel and bridge status | Critical for Discord path | Discord is preferred interface |  | Message round-trip / bot scope review | PENDING | Bridge token belongs to Switch, not Zasky |
-| I-09 | Isolated test workspace/channel available? | Critical | Use non-production test data |  | Prove isolation | PENDING | Required for E2E/demo |
-| I-10 | VPS provider, region, OS, IPv4/hostname | Critical for resilient deployment | Linux VPS with persistent disk |  | SSH + resource check | PENDING | Monthly host spend ceiling required |
-| I-11 | SSH access and operator identity | Critical | Key-only access |  | Successful login; password login disabled where possible | PENDING | No root login; no private key in repo |
-| I-12 | Persistent disk location and size | Critical | Must persist SQLite and backups |  | Write/restart/read test | PENDING | Do not use ephemeral container FS |
-| I-13 | VPS monthly cost ceiling | Critical | No assumed free tier | USD/local currency cap: ___ | Provider billing settings checked | PENDING | Stop before exceeding cap |
-| I-14 | External network/firewall permissions | Critical | Only Switch-required ports + SSH |  | Firewall inspection | PENDING | No public Zasky API/DB |
-| I-15 | OpenAI API account/key | Critical for hosted model | Store in secret manager/env file | Secret location: ___ | Key presence check, redacted | PENDING | Key does not imply unlimited spending |
-| I-16 | Model identifier and tool-call capability | Critical | Verify a currently supported Responses API model |  | Small non-production tool-schema test | PENDING | Do not assume model is available |
-| I-17 | Monthly model spend cap | Critical | Hard cap required | USD cap: ___ | Billing/usage alert configuration | PENDING | 80% warning; 100% hard stop |
-| I-18 | Daily request/output token limits | Required | Safe default to be set after cap |  | Config tested | PENDING | Prevent runaway loops/cost |
-| I-19 | Provider data retention/training preference | Critical | Verify current terms/settings; minimize stored data |  | Settings/terms reviewed | PENDING | Do not promise deletion/retention not verified |
-| I-20 | Owner timezone | Critical | Provisional: `Africa/Lagos` | Confirm/change: ___ | IANA timezone parses | PENDING | UTC instants; local dates |
-| I-21 | Weekly availability windows by weekday | Critical | Must be owner supplied; no guessed capacity |  | Validate totals and overlaps | PENDING | Capacity and scheduling |
-| I-22 | Fixed events for initial demo week | Critical for realistic schedule | Owner-supplied list |  | No conflicts in seed | PENDING | Zasky never moves these |
-| I-23 | Morning preparation buffer | Required | Safe default candidate: 30 min; confirm |  | Backplan test | PENDING | Latest-wake math |
-| I-24 | Commute buffer | Required | Safe default candidate: 0 min only if confirmed |  | Backplan test | PENDING | Latest-wake math |
-| I-25 | Transition buffer between blocks | Required | Candidate: 10 min |  | Conflict tests | PENDING | Capacity and daily schedule |
-| I-26 | Capacity percentage | Required | Locked baseline 65%; allowed 60–70% | Confirm 65% or choose 60–70: ___ | Config validation | PENDING | Slack reserve |
-| I-27 | Daily task ceiling | Fixed | 3 | No change | Unit test | PASS | Product invariant |
-| I-28 | Morning/evening reminder times | Optional | Candidate 07:00 / 20:00 local; reminders can be disabled |  | Delivery test | PENDING | No reminder if disabled |
-| I-29 | Seed year goals and evidence of done | Optional for infrastructure, required for representative demo | Owner chooses 3–5 |  | Owner validates wording | PENDING | Never invent goal content |
-| I-30 | Seed month commitments, estimates, deadlines/consequences | Required for realistic planning demo | Owner supplies |  | Capacity/reality check | PENDING | No inferred commitments |
-| I-31 | Initial weekly task titles and estimates | Required for demo | Owner supplies specific work items |  | Every task maps to commitment | PENDING | Tasks not generated by model |
-| I-32 | Privacy/data handling constraints | Critical | Owner defines prohibited data/categories |  | Review against logs, prompts, backups | PENDING | Least data needed |
-| I-33 | Backup destination and encryption key handling | Critical | Encrypted daily backups, 7 daily + 4 weekly |  | Restore drill | PENDING | Key stored separately |
-| I-34 | Demo audience/story/pronunciation | Required before video | Hackathon judges; pronounce "Zasky" as operator confirms |  | Script reviewed | PENDING | Do not show private data |
-| I-35 | Demo output directory and permitted public artifacts | Required | Repo `artifacts/demo/` only if appropriate |  | Writable path and redaction | PENDING | No public secrets/private URLs |
-| I-36 | Google AI TTS or fallback permission | Optional | Check free availability and terms first |  | Quota/terms/credentials checked | PENDING | No charges without authorization |
-| I-37 | Production deployment authority | Critical | **Not granted by default** | Explicitly authorize exact scope or "staging only": ___ | Exact authorization recorded | PENDING | No production release without explicit scope |
-| I-38 | Destructive/irreversible action authority | Critical | **Not granted by default** | Allowed actions/limits: ___ | Operator wording recorded | PENDING | No deletion, financial or legal actions |
-| I-39 | Preview/staging deployment authority | Required if VPS deploy occurs | Exact test host/scope |  | Deployment smoke test | PENDING | Does not authorize production |
-| I-40 | Allowed monthly total cost (VPS + model + optional services) | Critical | No spending assumed | Cap and currency: ___ | Provider billing checks | PENDING | Hard stop at cap |
-| I-41 | Current model input/output pricing and effective date | Critical if paid model enabled | Verify exact model pricing at intake; no hard-coded stale price | Input/output rate + source/date: ___ | Pricing schedule checked against provider source | PENDING | Used for local cost ledger/hard stop |
-| I-42 | Week start convention | Required | Monday recommended; must be confirmed | Day: ___ | Week/date-boundary test | PENDING | Placement and capacity calculations |
+| I-01 | Existing repository URL/path and Git access | Critical | Local `/root/Zasky`; Git `main` | Local repository; read/write confirmed | Git status clean; `origin/main` reachable; no force-push | **PASS** | Preserve existing work |
+| I-02 | Switch hosting URL, workspace and version | Critical | Local Switch 0.31.0 | Local Switch at `http://127.0.0.1:8000` | `/health` 200; server 0.31.0; WebSocket protocol 9 | **PASS** | WebSocket/HTTP endpoint |
+| I-03 | Switch agent already registered? | Critical | Register once only if absent | Registered `zasky` | Agent row exists; ops endpoint 200 | **PASS** | Never duplicate registration |
+| I-04 | Switch registration credential | Critical if agent absent | Store outside this file | Admin-created registration key used once | Temporary key revoked; value redacted | **PASS** | One-time registration only |
+| I-05 | Switch agent ID and runtime API key | Critical | Exact existing agent identity | Stored in protected env | Key presence/length checked; value redacted; ops call 200 | **PASS** | Server-only; never log |
+| I-06 | Switch room ID for Zasky | Critical | One private Discord room | Stored in protected env | Room claim/context success; exact value redacted | **PASS** | Hard allow-list |
+| I-07 | Owner Switch participant ID | Critical | Exact opaque participant ID | Stored in protected env | Participant row and sender identity confirmed; value redacted | **PASS** | Exact allow-list before model/data access |
+| I-08 | Discord server/private channel and bridge status | Critical for Discord path | Discord is preferred interface | Bridge connected; channel exists | Bridge/room present; **Switch reports `channel_public`** | **BLOCKED** | Must be `channel_private` or `@everyone` view denied |
+| I-09 | Isolated test workspace/channel available? | Critical | Use non-production test data | Local test room exists | Only owner, agent, bridge and admin are members; visibility still public | **BLOCKED** | Fix channel privacy before acceptance/demo |
+| I-10 | VPS provider, region, OS, IPv4/hostname | Critical for resilient deployment | Linux VPS with persistent disk | Deferred; local staging only | Local Ubuntu 24.04.5 host | **NOT_APPLICABLE** | Cloud architecture documented only |
+| I-11 | SSH access and operator identity | Critical | Key-only access | Local host access only | Local shell; no VPS SSH configured | **NOT_APPLICABLE** | No production host |
+| I-12 | Persistent disk location and size | Critical | Must persist SQLite and backups | Local `/root/Zasky/data` | 73 GiB free; SQLite on local disk | **NOT_APPLICABLE** | VPS disk deferred |
+| I-13 | VPS monthly cost ceiling | Critical | No assumed free tier | $0 host spend | No VPS provisioned | **NOT_APPLICABLE** | Local only |
+| I-14 | External network/firewall permissions | Critical | Only Switch-required ports + SSH | No public Zasky ports | Health binds `127.0.0.1`; Switch ports localhost-only | **NOT_APPLICABLE** | Production firewall review deferred |
+| I-15 | OpenAI API account/key | Critical for hosted model | Store in secret manager/env file | Pending | No key present in repo/env | **BLOCKED** | Phase 4; key does not imply spend authority |
+| I-16 | Model identifier and tool-call capability | Critical | Verify a currently supported Responses API model | Proposed `gpt-6-luna`; not yet tested | Pricing verified; live tool-schema test pending | **BLOCKED** | Phase 4 |
+| I-17 | Monthly model spend cap | Critical | Hard cap required | **$20/month** | Cap recorded; 80% warning / 100% stop to implement | **PASS** | 80% warning; 100% hard stop |
+| I-18 | Daily request/output token limits | Required | Safe default after cap | **100 requests/day** | Proposed 24k input / 2k output per request | **PASS** | Prevent runaway loops/cost |
+| I-19 | Provider data retention/training preference | Critical | Verify current terms/settings; minimize stored data | Pending explicit acceptance | OpenAI API no training by default; abuse logs up to 30 days; `store=false` | **BLOCKED** | Phase 4 |
+| I-20 | Owner timezone | Critical | Provisional `Africa/Lagos` | Pending confirmation | Host is `Europe/Berlin`; must confirm | **BLOCKED** | UTC instants; local dates |
+| I-21 | Weekly availability windows by weekday | Critical | Must be owner supplied; no guessed capacity | Pending; synthetic demo option | None supplied | **BLOCKED** | Capacity and scheduling |
+| I-22 | Fixed events for initial demo week | Critical for realistic schedule | Owner-supplied list | Pending; `none` acceptable | None supplied | **BLOCKED** | Zasky never moves these |
+| I-23 | Morning preparation buffer | Required | Candidate 30 min; confirm | Pending confirmation | None confirmed | **BLOCKED** | Latest-wake math |
+| I-24 | Commute buffer | Required | Candidate 0 min only if confirmed | Pending confirmation | None confirmed | **BLOCKED** | Latest-wake math |
+| I-25 | Transition buffer between blocks | Required | Candidate 10 min | Pending confirmation | None confirmed | **BLOCKED** | Capacity and daily schedule |
+| I-26 | Capacity percentage | Required | Locked baseline 65%; allowed 60–70% | 65% unless overridden | Product invariant | **PASS** | Slack reserve |
+| I-27 | Daily task ceiling | Fixed | 3 | No change | Product invariant | **PASS** | Product invariant |
+| I-28 | Morning/evening reminder times | Optional | Candidate 07:00 / 20:00; can disable | Defaults; reminders off | No reminder sent in Phase 1 | **PASS_WITH_DEFAULT** | No reminder if disabled |
+| I-29 | Seed year goals and evidence of done | Optional for infrastructure | Owner chooses 3–5 | Pending synthetic approval | No owner content invented | **BLOCKED** | Demo only |
+| I-30 | Seed month commitments, estimates, deadlines/consequences | Required for realistic planning demo | Owner supplies | Pending synthetic approval | No owner content invented | **BLOCKED** | Demo only |
+| I-31 | Initial weekly task titles and estimates | Required for demo | Owner supplies specific work items | Pending synthetic approval | No owner content invented | **BLOCKED** | Demo only |
+| I-32 | Privacy/data handling constraints | Critical | Owner defines prohibited data/categories | No secrets, no raw private text in logs, synthetic demo only | JSON logs exclude bodies; redaction active; DB stores no message body | **PASS** | Least data needed |
+| I-33 | Backup destination and encryption key handling | Critical | Encrypted daily backups, 7 daily + 4 weekly | Deferred; manual online backup + restore | Phase 2 will prove restore; encryption production-only | **NOT_APPLICABLE** | Hackathon deferral |
+| I-34 | Demo audience/story/pronunciation | Required before video | Hackathon judges; confirm pronunciation | Pending | Story documented; pronunciation not confirmed | **BLOCKED** | Demo only |
+| I-35 | Demo output directory and permitted public artifacts | Required | `artifacts/demo/` | Pending publication permission | Path exists; synthetic-only rule | **BLOCKED** | No public secrets/private IDs |
+| I-36 | Google AI TTS or fallback permission | Optional | Check free availability and terms first | Use free/local fallback; no charges | No paid service | **PASS_WITH_DEFAULT** | No charges without authorization |
+| I-37 | Production deployment authority | Critical | **Not granted by default** | **Staging only** | Local staging only | **NOT_APPLICABLE** | No production release |
+| I-38 | Destructive/irreversible action authority | Critical | **Not granted by default** | None | No destructive Zasky actions | **PASS** | No deletion/financial/legal actions |
+| I-39 | Preview/staging deployment authority | Required if VPS deploy occurs | Exact test host/scope | Local staging authorized | Docker container on local host only | **PASS** | Does not authorize production |
+| I-40 | Allowed monthly total cost (VPS + model + optional services) | Critical | No spending assumed | **$20/month** | Model cap $20; VPS $0; no other paid services | **PASS** | Hard stop at cap |
+| I-41 | Current model input/output pricing and effective date | Critical if paid model enabled | Verify exact model pricing at intake | `gpt-6-luna`: $0.10 input / $0.50 output per 1M | OpenAI pricing page checked 2026-11-05; re-verify if model changes | **PASS** | Local cost guard |
+| I-42 | Week start convention | Required | Monday recommended; confirm | Pending confirmation | None confirmed | **BLOCKED** | Placement/capacity calculations |
 
 ## Intake completion rules
 
@@ -62,10 +65,10 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 
 ## Readiness sign-off (operator inputs, not routine phase approvals)
 
-- Critical inputs complete: `YES / NO`
-- Switch-to-private-Discord round trip verified: `YES / NO`
-- Owner/room access controls tested: `YES / NO`
-- Cost ceilings and spend authorization recorded: `YES / NO`
-- Backup destination/restore plan verified: `YES / NO`
-- Production authority: `STAGING ONLY / EXPLICITLY AUTHORIZED (attach exact scope)`
-- Intake completed timestamp: ``
+- Critical inputs complete: **NO** — room privacy, OpenAI access, planning inputs and demo content remain open.
+- Switch-to-private-Discord round trip verified: **NO** — transport/room ready; owner message pending.
+- Owner/room access controls tested: **YES (automated)** — live negative test still to run.
+- Cost ceilings and spend authorization recorded: **YES** — $20/month, 100 requests/day.
+- Backup destination/restore plan verified: **NO** — Phase 2 manual online backup/restore.
+- Production authority: **STAGING ONLY**
+- Intake completed timestamp: `` (partial; 2026-11-06)
