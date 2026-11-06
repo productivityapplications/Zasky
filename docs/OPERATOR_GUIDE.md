@@ -67,6 +67,18 @@ Zasky keeps the last eight ordinary room messages as bounded conversational
 context. It does not persist raw room messages in SQLite. A request containing
 "plan" and a date produces a `plan_day` proposal (not a read-only list).
 
+## Proactive behavior
+
+- At an approved task's start time, Zasky posts: `⏰ **Timebox Started:** ...`
+  once per day-plan item. Alarms missed by more than five minutes are skipped.
+- A plan approval also posts a formatted Daily Briefing and saves it as a room
+  document. Switch 0.31.0 has no pin or scheduled-event operation; pin the
+  message manually in Discord if you want it at the top.
+- Focus mode is conversational. If you are already in a thread, Zasky replies
+  in that thread. Switch 0.31.0 does not expose thread creation, so Zasky cannot
+  create a new thread programmatically.
+- No third-party calendar, Google, or direct Discord API is used.
+
 ## Boundaries
 
 Zasky cannot stop you scrolling, control your sleep, guarantee that a deadline will be met or prevent service outages. It can preserve the plan, show the consequences and make the return path short.

@@ -406,6 +406,36 @@ class ModelUsageRecord(Base):
     correlation_id: Mapped[str] = mapped_column(String(80), nullable=False)
 
 
+class AlarmDispatch(Base):
+    __tablename__ = "alarm_dispatches"
+    __table_args__ = (
+        UniqueConstraint(
+            "day_plan_item_id",
+            "scheduled_start_utc",
+            name="uq_alarm_item_start",
+        ),
+        CheckConstraint(
+            "status IN ('pending','sent','skipped','failed')",
+            name="ck_alarm_status",
+        ),
+        Index("ix_alarm_status_start", "status", "scheduled_start_utc"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    day_plan_item_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("day_plan_items.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("week_tasks.id", ondelete="RESTRICT"), nullable=False
+    )
+    scheduled_start_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(8), nullable=False, default="pending")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class TimeboxCheckin(Base):
     __tablename__ = "timebox_checkins"
     __table_args__ = (
@@ -480,6 +510,7 @@ ALL_MODELS: tuple[Any, ...] = (
     ReminderDispatch,
     AuditEvent,
     ModelUsageRecord,
+    AlarmDispatch,
     TimeboxCheckin,
     SwitchConnectionState,
     ProcessedSwitchEvent,

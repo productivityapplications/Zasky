@@ -19,7 +19,7 @@
   recovery, Phase 3 deterministic domain/planner/tool schemas, and Phase 4
   OpenRouter Chat Completions orchestration. Live model calls are enabled with
   hard caps.
-- Database schema revision: `b23394c5a105`.
+- Database schema revision: `6823aaca3872`.
 - Domain tools: exactly seven strict schemas; proposal approval is deterministic.
 - Staging model: `openai/gpt-4o-mini` via OpenRouter Chat Completions; pricing
   `$0.15/$0.60` per 1M; `$20`/month and `100` requests/day caps.
@@ -48,7 +48,7 @@
 | Current Git commit | `445c4fb` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 107 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
+| Unit/integration/E2E evidence | 112 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -126,11 +126,11 @@
 - Video `artifacts/demo/zasky-demo.mp4` is 97 seconds, H.264/AAC, 1280×720, with
   local `espeak-ng` narration. It is explicitly labeled a local
   protocol/transcript demo, not a Discord screen capture.
-- Tests: **107 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **112 passed**; `ruff check .` clean; `mypy src` clean.
 
 ## Phase 9 evidence
 
-- Final tests: **107 passed**; `ruff check .` clean; `mypy src` clean.
+- Final tests: **112 passed**; `ruff check .` clean; `mypy src` clean.
 - Secret scan: no API key, bearer token or real owner/room ID in tracked files.
 - Final backup/restore: integrity `ok`, 0 foreign-key violations, 17 tables,
   3 goals, 3 commitments, 6 tasks, 2 day-plan items, schema `b23394c5a105`.
@@ -149,7 +149,7 @@
 - Plan/reconcile display blocks are deterministic from tool payloads.
 - Conversational approvals are refused deterministically when a proposal is
   pending; the reply names the exact `approve ZK-XXXX` command.
-- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
+- Tests: **112 passed**; `ruff` clean; `mypy src` clean.
 
 ## Phase 6 formatting follow-up
 
@@ -160,7 +160,7 @@
 - Approval replies use deterministic Markdown.
 - Owner-reported clock times and weekday references are normalized
   deterministically; the model's calendar cannot override them.
-- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
+- Tests: **112 passed**; `ruff` clean; `mypy src` clean.
 
 ## Phase 6 edge-case follow-up
 
@@ -171,7 +171,18 @@
   "battery" means after a battery question.
 - Generic validation failures now return a helpful example command instead of
   "I couldn't validate that request."
-- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
+- Tests: **112 passed**; `ruff` clean; `mypy src` clean.
+
+## Phase 6 proactive features
+
+- Task-start alarms are sent through Switch at approved item start with
+  `alarm_dispatches` dedupe and five-minute restart grace.
+- Plan approval posts a deterministic Daily Briefing and creates a room document.
+- Focus mode is prompt-driven; replies stay in an existing thread via `thread_id`.
+- Switch 0.31.0 has no create-thread, pin, or scheduled-event operation. No
+  direct Discord API was added. Daily Briefing pinning and thread creation remain
+  manual/provider-limited.
+- Tests: **112 passed**; `ruff` clean; `mypy src` clean.
 
 ## Known issues and blockers
 

@@ -24,6 +24,7 @@ class FakeSwitchServer:
         self.connections: asyncio.Queue[Any] = asyncio.Queue()
         self.active: list[Any] = []
         self.posts: list[str] = []
+        self.post_payloads: list[dict[str, Any]] = []
         self.connect_calls = 0
         self.read_context_calls = 0
         self._server: Any = None
@@ -77,6 +78,7 @@ class FakeSwitchServer:
 
         @app.post("/agents/{agent_id}/ops/post_message")
         async def post_message(payload: dict[str, Any]) -> dict[str, object]:
+            self.post_payloads.append(dict(payload))
             self.posts.append(str(payload.get("body", "")))
             return {"result": {"event_id": f"posted-{len(self.posts)}"}}
 
@@ -90,6 +92,7 @@ def message_frame(
     sender: str = "@owner:test",
     addressed: bool = True,
     body: str = "hello",
+    thread_id: str | None = None,
 ) -> str:
     return json.dumps(
         {
@@ -103,6 +106,7 @@ def message_frame(
                     "sender_name": "Owner",
                     "message_id": f"m{sequence}",
                     "body": body,
+                    "thread_id": thread_id,
                     "timestamp": sequence,
                 },
                 "sequence": sequence,
@@ -327,6 +331,19 @@ async def test_taken_over_is_terminal(
     await wait_until(lambda: client.connection_status == "terminal")
     await asyncio.sleep(0.3)
     assert task.done()
+
+
+@pytest.mark.asyncio
+async def test_reply_stays_in_existing_thread(harness) -> None:
+    fake, client, _db, _task = harness
+    websocket = await fake.next_connection()
+    await websocket.send(connection_state())
+    await wait_until(lambda: client.is_ready)
+    await websocket.send(
+        message_frame(1, body="help me with this task", thread_id="thread-1")
+    )
+    await wait_until(lambda: len(fake.posts) == 1)
+    assert fake.post_payloads[0]["thread_id"] == "thread-1"
 
 
 @pytest.mark.asyncio

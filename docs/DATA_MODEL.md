@@ -275,3 +275,21 @@ Generic optimistic-concurrency ledger used to stale proposals reliably when any 
 | `updated_at` | DATETIME | Yes | UTC |
 
 Create missing scope rows transactionally with revision 1. Proposal creation records the relevant scope/revision pairs in its payload and primary `scope_key`/`base_revision` columns. The approval transaction locks/serializes the write, compares all expected revisions, performs the domain mutation and increments the affected scopes atomically. A mismatch marks the proposal `stale`; no partial write occurs. Mutations to a task status/date increment its week scope and, when applicable, its assigned day scope. A fixed-event change increments each affected week/day scope whose schedule overlaps the event. Owner configuration changes increment `config:owner` and invalidate any proposal whose calculation depended on changed settings.
+
+## 17. `alarm_dispatches`
+
+Proactive task-start alarm dedupe for approved day-plan items.
+
+| Field | Type | Required | Rules |
+|---|---|---:|---|
+| `id` | UUID TEXT | Yes | PK |
+| `day_plan_item_id` | UUID TEXT | Yes | FK `day_plan_items.id` CASCADE |
+| `task_id` | UUID TEXT | Yes | FK `week_tasks.id` RESTRICT |
+| `scheduled_start_utc` | DATETIME | Yes | UTC instant copied from the approved item |
+| `status` | TEXT | Yes | `pending`, `sent`, `skipped`, `failed` |
+| `sent_at` | DATETIME | No | UTC |
+| `created_at` | DATETIME | Yes | UTC |
+
+Unique `(day_plan_item_id, scheduled_start_utc)` prevents duplicate alarms across
+scheduler ticks or restarts. Index `(status, scheduled_start_utc)`. The scheduler
+posts through Switch `post_message`, never a direct Discord API.

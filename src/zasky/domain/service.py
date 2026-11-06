@@ -1800,6 +1800,7 @@ class DomainService:
             return {
                 "ok": True,
                 "proposal": proposal.code,
+                "proposal_type": kind,
                 "status": "approved",
                 "applied": applied,
             }

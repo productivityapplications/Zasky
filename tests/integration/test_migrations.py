@@ -51,6 +51,7 @@ def test_migration_upgrade_check_and_append_only_audit(tmp_path) -> None:
         assert "pending_proposals" in tables
         assert "audit_events" in tables
         assert "processed_switch_events" in tables
+        assert "alarm_dispatches" in tables
 
         triggers = {
             row[0]

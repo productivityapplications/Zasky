@@ -11,6 +11,7 @@ import uvicorn
 from sqlalchemy.engine import make_url
 
 from zasky.access.approvals import ApprovalCommand, is_conversational_approval
+from zasky.agent.briefing import BriefingBuilder
 from zasky.agent.context import ContextBuilder
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
@@ -21,6 +22,7 @@ from zasky.integrations.openrouter.usage import CostGuard
 from zasky.ops.health import create_health_app
 from zasky.ops.lock import SingleWriterLock
 from zasky.ops.maintenance import head_revision
+from zasky.scheduler.alarms import AlarmScheduler
 from zasky.storage.database import Database
 from zasky.storage.repositories import OwnerConfigRepository
 from zasky.switch.client import SwitchClient
@@ -36,6 +38,8 @@ class ZaskyApp:
         self.db = Database.from_settings(settings)
         self.ops = SwitchOperations(settings)
         self.domain = DomainService(self.db, settings)
+        self.briefing = BriefingBuilder(self.db, settings)
+        self.alarm_scheduler = AlarmScheduler(self.db, self.ops, settings)
         self.llm: OpenRouterClient | None = None
         self.orchestrator: AgentOrchestrator | None = None
         if settings.llm_enabled:
@@ -69,6 +73,7 @@ class ZaskyApp:
         self._health_server: uvicorn.Server | None = None
         self._health_task: asyncio.Task[None] | None = None
         self._switch_task: asyncio.Task[None] | None = None
+        self._alarm_task: asyncio.Task[None] | None = None
         self.schema_revision: str | None = None
         self.schema_ready = False
 
@@ -109,13 +114,17 @@ class ZaskyApp:
             self._health_server.serve(), name="zasky-health"
         )
         self._switch_task = asyncio.create_task(self.switch.run(), name="zasky-switch")
+        self._alarm_task = asyncio.create_task(
+            self.alarm_scheduler.run(), name="zasky-alarms"
+        )
 
     async def stop(self) -> None:
         logger.info("Zasky stopping", extra={"component": "app"})
         await self.switch.close()
+        await self.alarm_scheduler.stop()
         if self._health_server is not None:
             self._health_server.should_exit = True
-        for task in (self._switch_task, self._health_task):
+        for task in (self._switch_task, self._health_task, self._alarm_task):
             if task is None:
                 continue
             if not task.done():
@@ -129,6 +138,39 @@ class ZaskyApp:
         await self.db.close()
         await self.ops.close()
         self._lock.release()
+
+    async def _post_daily_briefing(self, local_date: str) -> str:
+        try:
+            from datetime import date as date_type
+
+            briefing = await self.briefing.build(date_type.fromisoformat(local_date))
+            await self.ops.post_message(briefing)
+            try:
+                await self.ops.create_room_document(
+                    name=f"Daily Briefing — {local_date}",
+                    description="Zasky daily briefing",
+                    instructions="Read this for the approved plan of the day.",
+                    content=briefing,
+                )
+            except Exception:
+                logger.warning(
+                    "Daily briefing document creation failed",
+                    extra={
+                        "component": "briefing",
+                        "error_code": "BRIEFING_DOCUMENT_FAILED",
+                    },
+                )
+            return (
+                "\n\n📅 **Daily Briefing posted.** "
+                "Switch 0.31.0 has no pin operation; pin the message in Discord "
+                "if you want it at the top."
+            )
+        except Exception:
+            logger.exception(
+                "Daily briefing post failed",
+                extra={"component": "briefing", "error_code": "BRIEFING_FAILED"},
+            )
+            return "\n\nThe plan is stored, but the Daily Briefing post failed."
 
     async def _handle_message(self, event: MessageEvent) -> str:
         if self.orchestrator is None:
@@ -200,9 +242,15 @@ class ZaskyApp:
             )
         code = result.get("proposal", command.code or "proposal")
         if result.get("status") == "approved":
+            note = ""
+            if result.get("proposal_type") == "day":
+                applied = result.get("applied", {})
+                local_date = applied.get("date") if isinstance(applied, dict) else None
+                if isinstance(local_date, str):
+                    note = await self._post_daily_briefing(local_date)
             return (
                 f"✅ **Approved** `{code}`\n\n"
-                "Your plan change is now stored.",
+                "Your plan change is now stored." + note,
                 "approval_applied",
             )
         if result.get("status") == "rejected":

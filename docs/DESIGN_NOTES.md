@@ -105,5 +105,23 @@ exact approval command. Reconcile has explicit **KEEP**, **MOVE** and **DROP**
 sections. The model is instructed to use the same style for general messages and
 not to re-format the deterministic blocks.
 
+## Native Switch capability audit (2026-11-06)
+
+Switch 0.31.0 exposes 53 agent operations. It has `post_message` with an
+optional `thread_id`, `read_context`, `create_room`, room documents and room
+updates, but it has **no** `create_thread`, `pin_message`, or Discord
+scheduled-event operation.
+
+Implemented behavior:
+- **Task-start alarms:** in-process scheduler posts a `Timebox Started` message
+  through `post_message` at the approved task start (five-minute restart grace).
+- **Focus mode:** the prompt supports focused co-worker behavior; replies stay in
+  the owner's existing thread via `thread_id`. Zasky does not claim to create a
+  thread it cannot create.
+- **Daily Briefing:** on `plan_day` approval, Zasky posts a formatted Daily
+  Briefing and creates a room document for persistence. Pinning and native
+  Discord scheduled events are unavailable through Switch 0.31.0; pin the
+  message manually in Discord if desired. No direct Discord API is used.
+
 ## Intentional exclusions
 No website shell, dashboard, mockup, UI reference imagery, footer, web metadata, app icon or `stageshow` skill installation. Reconsider only after an explicit product scope change.

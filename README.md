@@ -18,6 +18,11 @@ and reconcile. Phase 4 connects the bounded tool loop to the operator-selected
 OpenRouter Chat Completions endpoint (`openai/gpt-4o-mini`) with hard request
 and spend caps.
 
+Proactive room features: task-start alarms, thread-aware focus mode, and a
+deterministic Daily Briefing on plan approval. Switch 0.31.0 does not expose
+thread creation, pinning, or scheduled events; these limitations are documented
+and no direct Discord API is used.
+
 The runtime intentionally uses **OpenRouter's OpenAI-compatible Chat
 Completions** format rather than the OpenAI Responses API. This was an explicit
 operator decision recorded in `AI_HANDOFF.md` and `docs/BUILD_LOG.md`; the

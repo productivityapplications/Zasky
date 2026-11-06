@@ -474,7 +474,9 @@ class SwitchClient:
                     outcome = "failed"
             try:
                 await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
-                await self._ops.post_message(reply)
+                await self._ops.post_message(
+                reply, thread_id=event.data.payload.thread_id
+            )
             except (TimeoutError, SwitchOperationsError) as exc:
                 outcome = "failed"
                 logger.error(
@@ -525,7 +527,9 @@ class SwitchClient:
                 outcome = "failed"
         try:
             await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
-            await self._ops.post_message(reply)
+            await self._ops.post_message(
+                reply, thread_id=event.data.payload.thread_id
+            )
         except TimeoutError:
             outcome = "failed"
             logger.error(

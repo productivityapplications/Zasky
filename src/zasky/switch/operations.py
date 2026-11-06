@@ -75,3 +75,21 @@ class SwitchOperations:
         if thread_id is not None:
             payload["thread_id"] = thread_id
         return await self._post_operation("post_message", payload)
+
+    async def create_room_document(
+        self,
+        *,
+        name: str,
+        description: str,
+        instructions: str,
+        content: str,
+    ) -> dict[str, Any]:
+        return await self._post_operation(
+            "create_room_document",
+            {
+                "name": name,
+                "description": description,
+                "instructions": instructions,
+                "content": content,
+            },
+        )

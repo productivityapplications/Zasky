@@ -223,6 +223,23 @@
 - Tests: **107 passed**; `ruff` clean; `mypy src` clean. Live check for a
   Sunday plan request returned the exact empty-schedule message.
 
+## 2026-11-06 — Phase 6: proactive room features
+
+- Added `alarm_dispatches` persistence and migration `6823aaca3872`.
+- Added an in-process task-start alarm scheduler: approved day-plan items post
+  `⏰ **Timebox Started:** ...` through Switch `post_message` once per item,
+  with a five-minute restart grace and database dedupe.
+- Added focus mode: the prompt supports focused co-worker help; replies stay in
+  the owner's existing Switch thread via `thread_id`.
+- Added deterministic Daily Briefing on `plan_day` approval: formatted room
+  message plus a persistent room document. The message explains that Switch
+  0.31.0 has no pin operation; manual Discord pinning remains.
+- Audited Switch 0.31.0 operations: no thread creation, pin, or scheduled-event
+  operation exists; no direct Discord API was added.
+- Tests: **112 passed**; `ruff` clean; `mypy src` clean. Scheduler, briefing,
+  thread-aware reply and approval-briefing tests pass.
+- Migration applied locally; health shows schema current.
+
 ## Checkpoint template
 
 ```text
