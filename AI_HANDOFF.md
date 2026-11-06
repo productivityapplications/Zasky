@@ -44,8 +44,8 @@
 | Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `dbabb74` (context/approval fixes) |
-| Current Git commit | `dbabb74` plus docs checkpoint |
+| Deployed commit | `7054360` (Discord formatting) |
+| Current Git commit | `7054360` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
 | Unit/integration/E2E evidence | 104 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
