@@ -44,8 +44,8 @@
 | Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `445c4fb` (empty-schedule and clarification fixes) |
-| Current Git commit | `445c4fb` plus docs checkpoint |
+| Deployed commit | `754b0c3` (proactive alarms and briefing) |
+| Current Git commit | `754b0c3` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
 | Unit/integration/E2E evidence | 112 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
