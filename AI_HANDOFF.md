@@ -48,7 +48,7 @@
 | Current Git commit | `7054360` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 104 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
+| Unit/integration/E2E evidence | 107 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -126,11 +126,11 @@
 - Video `artifacts/demo/zasky-demo.mp4` is 97 seconds, H.264/AAC, 1280×720, with
   local `espeak-ng` narration. It is explicitly labeled a local
   protocol/transcript demo, not a Discord screen capture.
-- Tests: **104 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **107 passed**; `ruff check .` clean; `mypy src` clean.
 
 ## Phase 9 evidence
 
-- Final tests: **104 passed**; `ruff check .` clean; `mypy src` clean.
+- Final tests: **107 passed**; `ruff check .` clean; `mypy src` clean.
 - Secret scan: no API key, bearer token or real owner/room ID in tracked files.
 - Final backup/restore: integrity `ok`, 0 foreign-key violations, 17 tables,
   3 goals, 3 commitments, 6 tasks, 2 day-plan items, schema `b23394c5a105`.
@@ -149,7 +149,7 @@
 - Plan/reconcile display blocks are deterministic from tool payloads.
 - Conversational approvals are refused deterministically when a proposal is
   pending; the reply names the exact `approve ZK-XXXX` command.
-- Tests: **104 passed**; `ruff` clean; `mypy src` clean.
+- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
 
 ## Phase 6 formatting follow-up
 
@@ -160,7 +160,18 @@
 - Approval replies use deterministic Markdown.
 - Owner-reported clock times and weekday references are normalized
   deterministically; the model's calendar cannot override them.
-- Tests: **104 passed**; `ruff` clean; `mypy src` clean.
+- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
+
+## Phase 6 edge-case follow-up
+
+- Empty day-plan requests return the specific "You don't have any tasks
+  scheduled for {Weekday}..." message, including when the model calls
+  `plan_day` and when the deterministic fallback runs.
+- Battery clarification is handled deterministically when the owner asks what
+  "battery" means after a battery question.
+- Generic validation failures now return a helpful example command instead of
+  "I couldn't validate that request."
+- Tests: **107 passed**; `ruff` clean; `mypy src` clean.
 
 ## Known issues and blockers
 

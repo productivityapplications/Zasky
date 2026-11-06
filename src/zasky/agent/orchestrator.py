@@ -43,6 +43,19 @@ _PROMPT_PATH = Path(__file__).parent / "prompts" / "system.md"
 _PROPOSAL_TOOLS = {"add_commitment", "place_week", "plan_day", "reconcile"}
 _STATUS_TOOLS = {"park_task", "complete_task"}
 
+EMPTY_SCHEDULE_TEMPLATE = (
+    "You don't have any tasks scheduled for {day}. "
+    "You can ask me to plan your week to add some."
+)
+BATTERY_CLARIFICATION = (
+    "Battery refers to your energy level. I use it to decide how many tasks "
+    "to schedule. Please reply with low, medium, or high."
+)
+HELPFUL_FALLBACK = (
+    "I didn't understand that. If you are trying to plan your day, try: "
+    "'@zasky What is my plan for tomorrow? Battery medium'."
+)
+
 
 def load_system_prompt() -> str:
     return _PROMPT_PATH.read_text(encoding="utf-8").strip()
@@ -88,6 +101,8 @@ class AgentOrchestrator:
                     "Room history unavailable",
                     extra={"component": "agent", "error_code": "HISTORY_UNAVAILABLE"},
                 )
+        if self._is_battery_clarification(text, recent_messages):
+            return BATTERY_CLARIFICATION
         try:
             context = await self._context.build(recent_messages)
         except Exception:
@@ -208,6 +223,16 @@ class AgentOrchestrator:
                     invalid_count += 1
                     continue
                 except DomainError as exc:
+                    if call.name == "plan_day" and exc.code == "NO_WEEK_TASKS":
+                        try:
+                            requested = date.fromisoformat(
+                                str(raw_arguments.get("date"))
+                            )
+                            return EMPTY_SCHEDULE_TEMPLATE.format(
+                                day=requested.strftime("%A")
+                            )
+                        except (TypeError, ValueError):
+                            pass
                     result = exc.envelope(correlation_id)
                 except Exception:
                     logger.exception(
@@ -240,7 +265,7 @@ class AgentOrchestrator:
                 )
 
             if invalid_count >= 2:
-                return "I couldn't validate that request. Nothing changed. Please restate it."
+                return HELPFUL_FALLBACK
             if proposal_count > self._settings.llm_max_proposals_per_message:
                 return (
                     "I can prepare at most two changes in one message. "
@@ -355,6 +380,22 @@ class AgentOrchestrator:
             ).isoformat()
         return arguments
 
+    @staticmethod
+    def _is_battery_clarification(
+        text: str, recent_messages: list[dict[str, Any]]
+    ) -> bool:
+        lowered = text.lower()
+        if "battery" not in lowered and "what do you mean" not in lowered:
+            return False
+        if "mean" not in lowered and "what do you mean" not in lowered:
+            return False
+        for message in reversed(recent_messages):
+            sender = str(message.get("sender_name", "")).lower()
+            if "zasky" not in sender:
+                continue
+            return "battery" in str(message.get("body", "")).lower()
+        return False
+
     async def _execute(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "add_commitment":
             return await self._domain.propose_record(
@@ -415,6 +456,10 @@ class AgentOrchestrator:
                 )
             )
         except DomainError as exc:
+            if exc.code == "NO_WEEK_TASKS":
+                return EMPTY_SCHEDULE_TEMPLATE.format(
+                    day=parsed_date.strftime("%A")
+                )
             return f"{exc.message} (code: {exc.code})"
         detail = self._proposal_detail("plan_day", result)
         if not detail:
@@ -622,10 +667,7 @@ class AgentOrchestrator:
             )
             text = re.sub(r"[ \t]{2,}", " ", text).strip()
         if not proposals and invalid and not (mentioned & allowed):
-            return (
-                "I couldn't create a valid proposal. Nothing changed. "
-                "Please restate the request."
-            )
+            return HELPFUL_FALLBACK
         if proposal_details:
             # Plan/reconcile blocks are deterministic and must not be mixed with
             # the model's potentially wrong weekday/date narrative.
@@ -634,7 +676,7 @@ class AgentOrchestrator:
             if f"**Proposal Code:** `{code}`" not in text:
                 footer = self._proposal_footer(code)
                 text = f"{text}\n\n{footer}".strip()
-        return text or "I couldn't produce a safe answer from the stored plan."
+        return text or HELPFUL_FALLBACK
 
     @staticmethod
     def _provider_error_message(error: LLMError) -> str:

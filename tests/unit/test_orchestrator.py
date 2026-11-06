@@ -186,7 +186,7 @@ async def test_invalid_tool_arguments_twice_do_not_write(orchestrator_env) -> No
         CostGuard(db, settings),
     )
     reply = await orch.handle_message(event("make a goal"))
-    assert "couldn't validate" in reply
+    assert "I didn't understand that" in reply
     from sqlalchemy import select
 
     from zasky.storage.models import PendingProposal, YearGoal
@@ -271,7 +271,7 @@ async def test_hallucinated_code_is_rejected(orchestrator_env) -> None:
     )
     reply = await orch.handle_message(event("make a plan"))
     assert "ZK-XXXX" not in reply
-    assert "couldn't create a valid proposal" in reply
+    assert "I didn't understand that" in reply
 
 
 def test_argument_normalizer_fills_redundant_month_fields(orchestrator_env) -> None:
@@ -442,3 +442,75 @@ def test_weekday_normalizer_uses_context_date(orchestrator_env) -> None:
     )
     assert args["date"] == expected.isoformat()
     assert args["battery"] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_empty_schedule_gets_specific_message(orchestrator_env) -> None:
+    db, settings = orchestrator_env
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(db, settings),
+        FakeLLM(LLMResponse(content="unused")),  # type: ignore[arg-type]
+        ContextBuilder(db, settings),
+        CostGuard(db, settings),
+    )
+    planned = orch._date_from_text("What is my plan for Sunday? Battery medium.")
+    assert planned is not None
+    reply = await orch._fallback_plan("What is my plan for Sunday? Battery medium.")
+    assert reply == (
+        "You don't have any tasks scheduled for Sunday. "
+        "You can ask me to plan your week to add some."
+    )
+
+
+@pytest.mark.asyncio
+async def test_battery_clarification_explains_without_model(orchestrator_env) -> None:
+    db, settings = orchestrator_env
+    llm = FakeLLM()  # no response should be consumed
+
+    async def history():
+        return [
+            {
+                "sender_name": "Zasky",
+                "body": "What is your battery: low, medium, or high?",
+                "timestamp": 1,
+            }
+        ]
+
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(db, settings),
+        llm,  # type: ignore[arg-type]
+        ContextBuilder(db, settings),
+        CostGuard(db, settings),
+        history_provider=history,
+    )
+    reply = await orch.handle_message(event("what do you mean by that?"))
+    assert reply == (
+        "Battery refers to your energy level. I use it to decide how many tasks "
+        "to schedule. Please reply with low, medium, or high."
+    )
+    assert llm.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_empty_schedule_tool_error_is_specific(orchestrator_env) -> None:
+    db, settings = orchestrator_env
+    call = ToolCall(
+        id="call-1",
+        name="plan_day",
+        arguments='{"date":"2026-11-08","battery":"medium"}',
+    )
+    llm = FakeLLM(LLMResponse(content="", tool_calls=[call], usage_known=False))
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(db, settings),
+        llm,  # type: ignore[arg-type]
+        ContextBuilder(db, settings),
+        CostGuard(db, settings),
+    )
+    reply = await orch.handle_message(event("What is my plan for Sunday? Battery medium."))
+    assert reply == (
+        "You don't have any tasks scheduled for Sunday. "
+        "You can ask me to plan your week to add some."
+    )

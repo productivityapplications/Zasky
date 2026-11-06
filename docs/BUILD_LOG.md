@@ -207,6 +207,22 @@
   the exact plan/reconcile layouts with actual task titles, 12-hour local times
   and proposal codes.
 
+## 2026-11-06 — Phase 6 edge-case handling
+
+- Empty day-plan requests now return a specific message instead of a generic
+  validation error:
+  "You don't have any tasks scheduled for {Weekday}. You can ask me to plan
+  your week to add some." This covers both a model `plan_day` call and the
+  deterministic fallback.
+- Added a deterministic battery-clarification path: if Zasky just asked for
+  battery and the owner asks what it means, reply with the exact explanation
+  without calling the model.
+- Replaced generic validation failures with a helpful fallback:
+  "I didn't understand that. If you are trying to plan your day, try:
+  '@zasky What is my plan for tomorrow? Battery medium'."
+- Tests: **107 passed**; `ruff` clean; `mypy src` clean. Live check for a
+  Sunday plan request returned the exact empty-schedule message.
+
 ## Checkpoint template
 
 ```text
