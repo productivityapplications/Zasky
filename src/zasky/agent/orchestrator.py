@@ -280,15 +280,22 @@ class AgentOrchestrator:
     @staticmethod
     def _time_from_text(text: str) -> time | None:
         lowered = text.lower()
-        match = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", lowered)
-        if match:
-            return time(int(match.group(1)), int(match.group(2)))
+        iso = re.search(
+            r"\d{4}-\d{2}-\d{2}[t ](\d{2}):(\d{2})", lowered
+        )
+        if iso:
+            return time(int(iso.group(1)), int(iso.group(2)))
         match = re.search(r"\b(1[0-2]|0?[1-9])\s*(am|pm)\b", lowered)
         if match:
             hour = int(match.group(1)) % 12
             if match.group(2) == "pm":
                 hour += 12
             return time(hour, 0)
+        match = re.search(
+            r"(?<![\d+\-])([01]?\d|2[0-3]):([0-5]\d)(?!:\d)", lowered
+        )
+        if match:
+            return time(int(match.group(1)), int(match.group(2)))
         return None
 
     def _normalize_arguments(
@@ -412,11 +419,7 @@ class AgentOrchestrator:
         detail = self._proposal_detail("plan_day", result)
         if not detail:
             return "I couldn't format that proposal safely. Nothing changed."
-        return (
-            "I prepared a pending proposal. Nothing is changed until approval."
-            "\n\n"
-            + detail
-        )
+        return detail
 
     @staticmethod
     def _assistant_message(response: LLMResponse) -> dict[str, Any]:
@@ -473,57 +476,130 @@ class AgentOrchestrator:
         return any(word in lowered for word in ("park", "pause", "shelve"))
 
     @staticmethod
-    def _proposal_detail(tool: str, result: dict[str, Any]) -> str:
+    def _escape_md(text: str) -> str:
+        escaped = str(text).replace("\\", "\\\\")
+        for char in ("*", "_", "`", "~", "|"):
+            escaped = escaped.replace(char, "\\" + char)
+        return escaped
+
+    @staticmethod
+    def _display_date(value: object) -> str:
+        try:
+            day = date.fromisoformat(str(value))
+        except ValueError:
+            return str(value)
+        return f"{day.strftime('%A, %b')} {day.day}"
+
+    @staticmethod
+    def _short_date(value: object) -> str:
+        try:
+            day = date.fromisoformat(str(value))
+        except ValueError:
+            return str(value)
+        return f"{day.strftime('%a, %b')} {day.day}"
+
+    @staticmethod
+    def _display_time(value: object) -> str:
+        if value is None or str(value).strip() == "":
+            return "Unavailable"
+        raw = str(value)[:5]
+        try:
+            return datetime.strptime(raw, "%H:%M").strftime("%I:%M %p")
+        except ValueError:
+            return str(value)
+
+    @staticmethod
+    def _proposal_footer(code: str) -> str:
+        return (
+            "---\n"
+            f"**Proposal Code:** `{code}`\n"
+            f"*Reply with `approve {code}` to lock this in.*\n"
+            "---"
+        )
+
+    @classmethod
+    def _proposal_detail(cls, tool: str, result: dict[str, Any]) -> str:
         payload = result.get("payload")
         code = result.get("proposal")
         if not isinstance(payload, dict) or not isinstance(code, str):
             return ""
         if tool == "plan_day":
-            day = date.fromisoformat(str(payload.get("date")))
-            lines = [
-                f"Plan for {day.strftime('%A, %d %B %Y')} "
-                f"({payload.get('battery')} battery):"
-            ]
-            for item in payload.get("items", []):
-                if not isinstance(item, dict):
-                    continue
+            items = [item for item in payload.get("items", []) if isinstance(item, dict)]
+            must = [item for item in items if item.get("disposition") == "must"]
+            should = [item for item in items if item.get("disposition") == "should"]
+            lines = [f"📅 **{cls._display_date(payload.get('date'))}**", "", "**MUST DO:**"]
+            for item in must:
                 lines.append(
-                    f"- {item.get('planned_start_display', '?')}–"
-                    f"{item.get('planned_end_display', '?')} "
-                    f"{str(item.get('disposition', '')).upper()}: "
-                    f"{item.get('task_title', 'task')}"
+                    f"- 📌 **{cls._escape_md(str(item.get('task_title', 'task')))}** "
+                    f"({item.get('planned_est_min', '?')} min)"
                 )
-            if payload.get("latest_wake_display"):
+            if not must:
+                lines.append("- None")
+            lines.extend(["", "**SHOULD DO:**"])
+            for item in should:
                 lines.append(
-                    f"Latest wake: {payload['latest_wake_display']} "
-                    f"(first required start {payload.get('first_required_start_display', '?')})."
+                    f"- ✅ **{cls._escape_md(str(item.get('task_title', 'task')))}** "
+                    f"({item.get('planned_est_min', '?')} min)"
                 )
-            lines.append(f"Proposal {code}. Nothing is changed until approval.")
+            if not should:
+                lines.append("- None")
+            lines.extend(
+                [
+                    "",
+                    f"⏰ **Latest Wake Time:** "
+                    f"{cls._display_time(payload.get('latest_wake_display'))}",
+                    "",
+                    cls._proposal_footer(code),
+                ]
+            )
             return "\n".join(lines)
         if tool == "reconcile":
             feasibility = payload.get("feasibility", {})
-            day = date.fromisoformat(str(payload.get("date")))
+            items = [item for item in payload.get("items", []) if isinstance(item, dict)]
             lines = [
-                f"Recovery proposal for {day.strftime('%A, %d %B %Y')}:"
+                f"🔄 **Recovery Proposal — {cls._display_date(payload.get('date'))}**",
+                "",
+                "**KEEP:**",
             ]
-            for item in payload.get("items", []):
-                if not isinstance(item, dict):
-                    continue
+            for item in items:
+                icon = "📌" if item.get("disposition") == "must" else "✅"
                 lines.append(
-                    f"- {item.get('planned_start_display', '?')}–"
-                    f"{item.get('planned_end_display', '?')} "
-                    f"{str(item.get('disposition', '')).upper()}: "
-                    f"{item.get('task_title', 'task')}"
+                    f"- {icon} **{cls._escape_md(str(item.get('task_title', 'task')))}** "
+                    f"({cls._display_time(item.get('planned_start_display'))}–"
+                    f"{cls._display_time(item.get('planned_end_display'))})"
                 )
-            moves = payload.get("moves", [])
-            if moves:
-                lines.append(f"- Move {len(moves)} task(s) within this week.")
-            if isinstance(feasibility, dict) and feasibility.get("status"):
+            if not items:
+                lines.append("- None")
+            lines.extend(["", "**MOVE:**"])
+            moves = [move for move in payload.get("moves", []) if isinstance(move, dict)]
+            for move in moves:
                 lines.append(
-                    f"Week status: {feasibility.get('status')} "
-                    f"({feasibility.get('arithmetic', '')})."
+                    f"- **{cls._escape_md(str(move.get('task_title', 'task')))}** → "
+                    f"{cls._short_date(move.get('to_date'))}"
                 )
-            lines.append(f"Proposal {code}. Nothing is changed until approval.")
+            if not moves:
+                lines.append("- None")
+            lines.extend(["", "**DROP:**"])
+            drops = [drop for drop in payload.get("drops", []) if isinstance(drop, dict)]
+            for drop in drops:
+                lines.append(f"- **{cls._escape_md(str(drop.get('task_title', 'task')))}**")
+            if not drops:
+                lines.append("- None")
+            status = str(feasibility.get("status", "insufficient_data"))
+            labels = {
+                "week_holds": "HOLDS",
+                "week_at_risk": "AT RISK",
+                "insufficient_data": "INSUFFICIENT DATA",
+            }
+            lines.extend(
+                [
+                    "",
+                    f"**Week Status:** **{labels.get(status, status.upper())}**",
+                    f"*{cls._escape_md(str(feasibility.get('arithmetic', '')))}*",
+                    "",
+                    cls._proposal_footer(code),
+                ]
+            )
             return "\n".join(lines)
         return ""
 
@@ -551,22 +627,13 @@ class AgentOrchestrator:
                 "Please restate the request."
             )
         if proposal_details:
-            # A plan/reconcile block is deterministic and must not be mixed with
+            # Plan/reconcile blocks are deterministic and must not be mixed with
             # the model's potentially wrong weekday/date narrative.
-            text = (
-                "I prepared a pending proposal. Nothing is changed until approval."
-                "\n\n"
-                + "\n\n".join(proposal_details)
-            )
-        missing = [code for code in proposals if code not in text]
-        if missing:
-            lines = [text] if text else []
-            for code in missing:
-                lines.append(
-                    f"Proposal {code}: approve {code} or reject {code}. "
-                    "Nothing is changed until approval."
-                )
-            text = "\n\n".join(lines)
+            text = "\n\n".join(proposal_details)
+        for code in proposals:
+            if f"**Proposal Code:** `{code}`" not in text:
+                footer = self._proposal_footer(code)
+                text = f"{text}\n\n{footer}".strip()
         return text or "I couldn't produce a safe answer from the stored plan."
 
     @staticmethod

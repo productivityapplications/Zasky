@@ -96,5 +96,14 @@ These are layout examples, not fabricated state. The system fills them from actu
   The reply is: "I cannot accept conversational approvals. Please reply with
   `approve ZK-XXXX` to lock this in."
 
+## Discord formatting (2026-11-06)
+
+Plan and reconcile messages are rendered by Python templates, not left to the
+model. Headers and task names use bold, lists use `- ` bullets, sections use
+double line breaks, proposal codes use inline code and the footer repeats the
+exact approval command. Reconcile has explicit **KEEP**, **MOVE** and **DROP**
+sections. The model is instructed to use the same style for general messages and
+not to re-format the deterministic blocks.
+
 ## Intentional exclusions
 No website shell, dashboard, mockup, UI reference imagery, footer, web metadata, app icon or `stageshow` skill installation. Reconsider only after an explicit product scope change.

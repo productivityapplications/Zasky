@@ -50,7 +50,7 @@ Test pure domain behavior without Switch or a model:
 ## Phase 1–2 evidence — 2026-11-06
 
 ```bash
-uv run pytest -q                 # 100 passed
+uv run pytest -q                 # 104 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 docker build -t zasky:phase1 .   # success
@@ -72,8 +72,9 @@ seven strict tool schemas, goal/commitment limits, capacity and slack, week
 placement, day-plan one-must/three-max, low battery, backplan, fixed-event
 avoidance, proposal stale/expired/reject/duplicate approval, concurrent
 approval, park/resume/complete, deadline risk, reconcile arithmetic, bounded
-tool-loop validation, cost/request caps, hallucinated-code rejection and
-unauthorized events never reaching the model handler.
+tool-loop validation, cost/request caps, hallucinated-code rejection,
+unauthorized events never reaching the model handler, exact Discord Markdown
+templates, owner-clock/date normalization and conversational-approval refusal.
 
 Live staging evidence (2026-11-06):
 

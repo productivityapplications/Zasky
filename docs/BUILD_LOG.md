@@ -187,6 +187,26 @@
   that image reproduced the missing-memory/no-code behavior. The rebuilt image
   has the fixes and is ready for retest. Room privacy remains `channel_public`.
 
+## 2026-11-06 — Phase 6: Discord Markdown formatting
+
+- Added deterministic Discord Markdown templates for `plan_day` and
+  `reconcile` so the model cannot produce a wall of text or wrong date/time
+  labels.
+- `plan_day` now renders: date header, blank line, **MUST DO** bullets,
+  **SHOULD DO** bullets, latest wake, horizontal rule, inline-code proposal
+  code and exact approval hint.
+- `reconcile` now renders separate **KEEP**, **MOVE** and **DROP** sections,
+  week status/arithmetic and the same proposal footer. Move titles/dates and
+  drop titles come from the domain payload.
+- Approval replies are deterministic Markdown (`✅ **Approved**` / `🚫
+  **Rejected**` / `⚠️ **Not applied**`).
+- Added deterministic owner-clock/date normalization so "4pm Friday" uses the
+  owner's reported time and the context weekday map, not the model's calendar.
+- System prompt now documents Discord Markdown rules and the exact plan shape.
+- Tests: **104 passed**; `ruff` clean; `mypy src` clean. Live checks produced
+  the exact plan/reconcile layouts with actual task titles, 12-hour local times
+  and proposal codes.
+
 ## Checkpoint template
 
 ```text

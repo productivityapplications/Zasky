@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
 import pytest
 import pytest_asyncio
@@ -147,7 +148,8 @@ async def test_tool_proposal_is_pending_and_code_is_shown(orchestrator_env) -> N
         settings, domain, llm, ContextBuilder(db, settings), CostGuard(db, settings)  # type: ignore[arg-type]
     )
     reply = await orch.handle_message(event("make a goal to ship the plan"))
-    assert "Proposal ZK-" in reply
+    assert "**Proposal Code:**" in reply
+    assert re.search(r"ZK-[A-Z0-9]{4}", reply)
     from sqlalchemy import select
 
     from zasky.storage.models import PendingProposal, YearGoal
@@ -214,7 +216,7 @@ async def test_at_most_two_proposals_per_message(orchestrator_env) -> None:
         CostGuard(db, settings),
     )
     reply = await orch.handle_message(event("make three goals"))
-    assert reply.count("Proposal ZK-") == 2
+    assert reply.count("**Proposal Code:**") == 2
     from sqlalchemy import select
 
     from zasky.storage.models import PendingProposal
@@ -326,3 +328,117 @@ def test_prompt_has_conversational_approval_guard() -> None:
     assert "I cannot accept conversational approvals" in prompt
     assert "call `plan_day`" in prompt
     assert "Never calculate the calendar date yourself" in prompt
+
+
+def test_plan_day_template_is_discord_ready() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "plan_day",
+        {
+            "proposal": "ZK-4F8Q",
+            "payload": {
+                "date": "2026-11-06",
+                "battery": "medium",
+                "items": [
+                    {
+                        "task_title": "Record the demo narration",
+                        "disposition": "must",
+                        "planned_est_min": 45,
+                    },
+                    {
+                        "task_title": "Capture the recovery transcript",
+                        "disposition": "should",
+                        "planned_est_min": 60,
+                    },
+                ],
+                "latest_wake_display": "07:30",
+            },
+        },
+    )
+    assert "📅 **Friday, Nov 6**" in detail
+    assert "**MUST DO:**\n- 📌 **Record the demo narration** (45 min)" in detail
+    assert "**SHOULD DO:**\n- ✅ **Capture the recovery transcript** (60 min)" in detail
+    assert "⏰ **Latest Wake Time:** 07:30 AM" in detail
+    assert "**Proposal Code:** `ZK-4F8Q`" in detail
+    assert "*Reply with `approve ZK-4F8Q` to lock this in.*" in detail
+    assert "\n\n**SHOULD DO:**" in detail
+
+
+def test_reconcile_template_has_keep_move_drop() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "reconcile",
+        {
+            "proposal": "ZK-9ABC",
+            "payload": {
+                "date": "2026-11-06",
+                "items": [
+                    {
+                        "task_title": "Record the demo narration",
+                        "disposition": "must",
+                        "planned_start_display": "16:00",
+                        "planned_end_display": "16:45",
+                    }
+                ],
+                "moves": [
+                    {
+                        "task_title": "Write the demo script",
+                        "to_date": "2026-11-07",
+                    }
+                ],
+                "drops": [{"task_title": "Old admin task"}],
+                "feasibility": {
+                    "status": "week_holds",
+                    "arithmetic": "270 min work vs 1066 min budget",
+                },
+            },
+        },
+    )
+    assert "🔄 **Recovery Proposal — Friday, Nov 6**" in detail
+    assert "**KEEP:**" in detail
+    assert "**MOVE:**" in detail
+    assert "**DROP:**" in detail
+    assert "**Write the demo script** → Sat, Nov 7" in detail
+    assert "**Old admin task**" in detail
+    assert "**Week Status:** **HOLDS**" in detail
+    assert "**Proposal Code:** `ZK-9ABC`" in detail
+
+
+def test_owner_clock_overrides_model_and_offset(orchestrator_env) -> None:
+    _db, settings = orchestrator_env
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(_db, settings),
+        FakeLLM(LLMResponse(content="unused")),  # type: ignore[arg-type]
+        ContextBuilder(_db, settings),
+        CostGuard(_db, settings),
+    )
+    text = (
+        "Back. A call ran over; it's 4pm on Friday, 6 November 2026 "
+        "(2026-11-06T16:00:00+01:00)."
+    )
+    args = orch._normalize_arguments(
+        "reconcile", {"now_iso": "2026-11-06T09:00:00+01:00"}, text
+    )
+    assert args["now_iso"] == "2026-11-06T16:00:00+01:00"
+
+
+def test_weekday_normalizer_uses_context_date(orchestrator_env) -> None:
+    _db, settings = orchestrator_env
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(_db, settings),
+        FakeLLM(LLMResponse(content="unused")),  # type: ignore[arg-type]
+        ContextBuilder(_db, settings),
+        CostGuard(_db, settings),
+    )
+    text = "What is my plan for Friday? Battery medium."
+    expected = orch._date_from_text(text)
+    assert expected is not None
+    args = orch._normalize_arguments(
+        "plan_day", {"date": "2026-11-13", "battery": "low"}, text
+    )
+    assert args["date"] == expected.isoformat()
+    assert args["battery"] == "medium"

@@ -1090,6 +1090,7 @@ class DomainService:
             )
             selected: list[tuple[WeekTask, MonthCommitment | None]] = []
             moves: list[dict[str, Any]] = []
+            drops: list[dict[str, Any]] = []
             unplaced: list[str] = []
             selected_dates: dict[date, int] = {}
             for task, commitment in ranked:
@@ -1125,6 +1126,8 @@ class DomainService:
                         moves.append(
                             {
                                 "task_id": task.id,
+                                "task_title": task.title,
+                                "from_date": task.scheduled_date.isoformat(),
                                 "to_date": candidate_date.isoformat(),
                             }
                         )
@@ -1135,6 +1138,7 @@ class DomainService:
                         break
                 if not moved:
                     unplaced.append(task.id)
+                    drops.append({"task_id": task.id, "task_title": task.title})
 
             schedule = schedule_tasks(
                 local_date,
@@ -1200,6 +1204,7 @@ class DomainService:
                     "battery": "medium",
                     "items": items,
                     "moves": moves,
+                    "drops": drops,
                     "unplaced": unplaced,
                     "feasibility": {
                         "status": feasibility.status,

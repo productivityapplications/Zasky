@@ -193,25 +193,34 @@ class ZaskyApp:
                 room_id=event.data.room_id,
             )
         except DomainError as exc:
-            return (f"{exc.message} (code: {exc.code})", "failed")
+            return (
+                f"⚠️ **Not applied**\n\n{exc.message}\n\n"
+                f"*Code: `{exc.code}`*",
+                "failed",
+            )
         code = result.get("proposal", command.code or "proposal")
         if result.get("status") == "approved":
             return (
-                f"Approved {code}. The change is now stored. "
-                f"Approve {code} / Reject {code}",
+                f"✅ **Approved** `{code}`\n\n"
+                "Your plan change is now stored.",
                 "approval_applied",
             )
         if result.get("status") == "rejected":
             return (
-                f"Rejected {code}. No planning changes were applied.",
+                f"🚫 **Rejected** `{code}`\n\n"
+                "No planning changes were applied.",
                 "approval_applied",
             )
         if result.get("already") == "approved":
             return (
-                f"{code} was already approved. No further changes were made.",
+                f"ℹ️ **Already approved** `{code}`\n\n"
+                "No further changes were made.",
                 "approval_applied",
             )
-        return (f"Resolved {code}. No further changes were made.", "approval_applied")
+        return (
+            f"ℹ️ **Resolved** `{code}`\n\nNo further changes were made.",
+            "approval_applied",
+        )
 
     async def run_forever(self, stop: asyncio.Event) -> None:
         await self.start()
