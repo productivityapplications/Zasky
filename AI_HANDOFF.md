@@ -39,8 +39,8 @@
 | Preview/staging authority | Local staging only |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | Phase 2 checkpoint pending |
-| Current Git commit | Phase 2 checkpoint pending |
+| Deployed commit | `9f6a06c` (Phase 2 checkpoint) |
+| Current Git commit | `9f6a06c` |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
 | Unit/integration/E2E evidence | 46 tests pass; live owner round-trip pending |
