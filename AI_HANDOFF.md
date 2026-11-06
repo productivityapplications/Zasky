@@ -44,8 +44,8 @@
 | Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | Phase 4–9 checkpoint pending |
-| Current Git commit | Phase 4–9 checkpoint pending |
+| Deployed commit | `d41a6c2` (Phase 4–9 code/demo checkpoint) |
+| Current Git commit | `d41a6c2` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
 | Unit/integration/E2E evidence | 95 tests pass; live model/tool E2E; app-level Discord message pending |
