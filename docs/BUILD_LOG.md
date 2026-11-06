@@ -163,6 +163,30 @@
   deployment is authorized. The transcript demo is not a substitute for the live
   Discord round-trip; both limitations are stated in the handoff and docs.
 
+## 2026-11-06 — Phase 4 chat-context follow-up
+
+- Added the last eight ordinary Switch room messages to the model context via
+  `read_context`; each is bounded to 500 characters, marked untrusted and never
+  persisted in SQLite. The current inbound body is filtered out to avoid
+  duplication.
+- Added deterministic date/time normalization for `plan_day` and `reconcile`
+  from the owner's text and the context dates map. Plan requests now produce a
+  `plan_day` proposal with a code; the deterministic fallback covers a model
+  that chooses a read-only query.
+- Plan/reconcile proposal blocks are rendered from tool payloads, so the model
+  cannot substitute a wrong weekday, UTC/local time or task title.
+- Added a deterministic conversational-approval guard: "looks good", "lock that
+  in", "go ahead" and similar phrases never commit; if a proposal is pending,
+  the reply names the exact `approve ZK-XXXX` command.
+- System prompt updated with the same rules and the server date to anchor the
+  model's calendar.
+- Tests: **100 passed**; `ruff check .` clean; `mypy src` clean. Live model
+  checks confirmed conversation memory resolves the pending proposal code and
+  the plan request returns a pending code. The operator tested the previous
+  container in Discord at 18:12–18:14 UTC; app-level replies were observed, but
+  that image reproduced the missing-memory/no-code behavior. The rebuilt image
+  has the fixes and is ready for retest. Room privacy remains `channel_public`.
+
 ## Checkpoint template
 
 ```text

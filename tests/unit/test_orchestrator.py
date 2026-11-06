@@ -47,9 +47,11 @@ class FakeLLM:
     def __init__(self, *responses: LLMResponse | Exception) -> None:
         self._responses = list(responses)
         self.calls = 0
+        self.messages: list[list[dict]] = []
 
     async def chat(self, messages, tools=None) -> LLMResponse:
         self.calls += 1
+        self.messages.append(messages)
         result = self._responses.pop(0)
         if isinstance(result, Exception):
             raise result
@@ -290,3 +292,37 @@ def test_argument_normalizer_fills_redundant_month_fields(orchestrator_env) -> N
     assert args["year"] == 2026
     assert args["month"] == 11
     assert args["priority"] == "normal"
+
+
+@pytest.mark.asyncio
+async def test_recent_room_history_is_included(orchestrator_env) -> None:
+    db, settings = orchestrator_env
+    llm = FakeLLM(LLMResponse(content="Understood.", usage_known=False))
+
+    async def history():
+        return [
+            {"sender_name": "Owner", "body": "I have 45 minutes", "timestamp": 1},
+            {"sender_name": "Owner", "body": "What is my plan for Friday?", "timestamp": 2},
+        ]
+
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(db, settings),
+        llm,  # type: ignore[arg-type]
+        ContextBuilder(db, settings),
+        CostGuard(db, settings),
+        history_provider=history,
+    )
+    await orch.handle_message(event("should I lock that in?"))
+    context_prompt = llm.messages[0][2]["content"]
+    assert "recent_room_messages" in context_prompt
+    assert "I have 45 minutes" in context_prompt
+
+
+def test_prompt_has_conversational_approval_guard() -> None:
+    from zasky.agent.orchestrator import load_system_prompt
+
+    prompt = load_system_prompt()
+    assert "I cannot accept conversational approvals" in prompt
+    assert "call `plan_day`" in prompt
+    assert "Never calculate the calendar date yourself" in prompt

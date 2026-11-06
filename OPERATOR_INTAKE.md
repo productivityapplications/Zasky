@@ -66,7 +66,7 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 ## Readiness sign-off (operator inputs, not routine phase approvals)
 
 - Critical inputs complete: **NO** — only Discord room privacy remains; all other operator inputs for Phases 4–8 are recorded.
-- Switch-to-private-Discord round trip verified: **NO** — owner reports a greeting exchange; Zasky app-level evidence still pending, and the room is public.
+- Switch-to-private-Discord round trip verified: **NO** — app-level replies observed in the room, but the room is still `channel_public`, so the private-room requirement is not met.
 - Owner/room access controls tested: **YES (automated)** — unauthorized events never reach model/tool handlers.
 - Cost ceilings and spend authorization recorded: **YES** — $20/month, 100 requests/day.
 - Backup destination/restore plan verified: **YES** — online backup and restore integrity drill passed.

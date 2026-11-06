@@ -10,7 +10,7 @@ from pathlib import Path
 import uvicorn
 from sqlalchemy.engine import make_url
 
-from zasky.access.approvals import ApprovalCommand
+from zasky.access.approvals import ApprovalCommand, is_conversational_approval
 from zasky.agent.context import ContextBuilder
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
@@ -46,13 +46,14 @@ class ZaskyApp:
                 self.llm,
                 ContextBuilder(self.db, settings),
                 CostGuard(self.db, settings),
+                history_provider=self._recent_room_history,
             )
         self.switch = SwitchClient(
             settings,
             self.db,
             self.ops,
             message_handler=(
-                self.orchestrator.handle_message if self.orchestrator else None
+                self._handle_message if self.orchestrator else None
             ),
             approval_handler=self._handle_approval,
         )
@@ -128,6 +129,54 @@ class ZaskyApp:
         await self.db.close()
         await self.ops.close()
         self._lock.release()
+
+    async def _handle_message(self, event: MessageEvent) -> str:
+        if self.orchestrator is None:
+            return "The model is not configured. Nothing changed."
+        if is_conversational_approval(event.data.payload.body):
+            codes = await self.domain.pending_codes()
+            if codes:
+                code = sorted(codes)[0]
+                return (
+                    "I cannot accept conversational approvals. Please reply with "
+                    f"`approve {code}` to lock this in."
+                )
+        return await self.orchestrator.handle_message(event)
+
+    async def _recent_room_history(self) -> list[dict[str, object]]:
+        context = await self.ops.read_context(limit=20)
+        threads = context.get("threads", [])
+        entries: list[dict[str, object]] = []
+        if isinstance(threads, list):
+            for thread in threads:
+                if not isinstance(thread, dict):
+                    continue
+                root = thread.get("root")
+                if isinstance(root, dict):
+                    entries.append(root)
+                replies = thread.get("replies", [])
+                if isinstance(replies, list):
+                    entries.extend(item for item in replies if isinstance(item, dict))
+        def timestamp(item: dict[str, object]) -> int:
+            value = item.get("timestamp", 0)
+            return int(value) if isinstance(value, (int, float, str)) else 0
+
+        entries.sort(key=timestamp)
+        messages: list[dict[str, object]] = []
+        for entry in entries:
+            if entry.get("kind") != "message":
+                continue
+            body = str(entry.get("body", "")).strip()
+            if not body:
+                continue
+            messages.append(
+                {
+                    "sender_name": str(entry.get("sender_name") or "participant"),
+                    "body": body[:500],
+                    "timestamp": entry.get("timestamp"),
+                }
+            )
+        return messages[-10:]
 
     @property
     def model_ready(self) -> bool:

@@ -1,7 +1,7 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-06  
-**Project status:** Phases 1–9 complete; verified staging awaiting release; live Discord app-level round-trip pending  
+**Project status:** Phases 1–9 complete; verified staging awaiting release; live Discord app-level round-trip observed  
 **Current phase:** Phase 9 complete — final regression and release checklist  
 **Next task:** Operator fixes room privacy and sends one live Discord test message; production release remains unauthorized and steps are documented.
 
@@ -44,11 +44,11 @@
 | Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `d41a6c2` (Phase 4–9 code/demo checkpoint) |
-| Current Git commit | `d41a6c2` plus docs checkpoint |
+| Deployed commit | Phase 4 context-fix checkpoint pending |
+| Current Git commit | Phase 4 context-fix checkpoint pending |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 95 tests pass; live model/tool E2E; app-level Discord message pending |
+| Unit/integration/E2E evidence | 100 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -126,11 +126,11 @@
 - Video `artifacts/demo/zasky-demo.mp4` is 97 seconds, H.264/AAC, 1280×720, with
   local `espeak-ng` narration. It is explicitly labeled a local
   protocol/transcript demo, not a Discord screen capture.
-- Tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **100 passed**; `ruff check .` clean; `mypy src` clean.
 
 ## Phase 9 evidence
 
-- Final tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+- Final tests: **100 passed**; `ruff check .` clean; `mypy src` clean.
 - Secret scan: no API key, bearer token or real owner/room ID in tracked files.
 - Final backup/restore: integrity `ok`, 0 foreign-key violations, 17 tables,
   3 goals, 3 commitments, 6 tasks, 2 day-plan items, schema `b23394c5a105`.
@@ -139,6 +139,17 @@
   local TTS, real model/tool transcript, synthetic data).
 - Final release state: **verified-staging-awaiting-authorized-release**.
 - No production deployment was performed.
+
+## Phase 4 chat-context follow-up
+
+- Last eight room messages are included as bounded, untrusted context via
+  Switch `read_context`; raw room text is not persisted in SQLite.
+- Plan requests with a date produce a `plan_day` pending proposal and code,
+  including a deterministic fallback if the model chooses `query`.
+- Plan/reconcile display blocks are deterministic from tool payloads.
+- Conversational approvals are refused deterministically when a proposal is
+  pending; the reply names the exact `approve ZK-XXXX` command.
+- Tests: **100 passed**; `ruff` clean; `mypy src` clean.
 
 ## Known issues and blockers
 
@@ -158,9 +169,10 @@
 6. **Phase 1 DB reset:** the Phase 1 operations-only DB was backed up and then
    replaced by a fresh migrated Phase 2 DB. No domain data existed. The Switch
    cursor will resume from the server's current position.
-7. **App-level Discord round-trip:** the user reports an initial greeting
-   exchange, but this running container has not logged an owner message through
-   the full app path. Please send one test message after the room privacy fix.
+7. **Live Discord round-trip is now observed.** Owner messages at 18:12–18:14
+   on 2026-11-06 received app-level replies in the same room. The old running
+   image reproduced the reported memory/plan issues; the new image contains the
+   fixes and awaits a retest. Room privacy remains the outstanding issue.
 8. **Live Discord test is not the same as the local transcript demo.** The
    transcript uses the real model/tools/domain but not the Discord UI; this is
    documented in the video and production notes.

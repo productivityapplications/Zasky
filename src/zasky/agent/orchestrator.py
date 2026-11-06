@@ -11,9 +11,9 @@ import logging
 import re
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -34,7 +34,7 @@ from zasky.domain.schemas import (
 from zasky.domain.service import DomainService
 from zasky.integrations.openrouter.client import LLMError, LLMResponse, OpenRouterClient
 from zasky.integrations.openrouter.usage import CostGuard
-from zasky.planner.core import week_start_for
+from zasky.planner.core import WEEKDAYS, week_start_for
 from zasky.switch.events import MessageEvent
 
 logger = logging.getLogger(__name__)
@@ -56,12 +56,14 @@ class AgentOrchestrator:
         llm: OpenRouterClient,
         context_builder: ContextBuilder,
         cost_guard: CostGuard,
+        history_provider: Callable[[], Awaitable[list[dict[str, Any]]]] | None = None,
     ) -> None:
         self._settings = settings
         self._domain = domain
         self._llm = llm
         self._context = context_builder
         self._cost = cost_guard
+        self._history_provider = history_provider
         self._system_prompt = load_system_prompt()
 
     async def handle_message(self, event: MessageEvent) -> str:
@@ -71,8 +73,23 @@ class AgentOrchestrator:
             await self._cost.check()
         except DomainError as exc:
             return f"{exc.message} (code: {exc.code})"
+        recent_messages: list[dict[str, Any]] = []
+        if self._history_provider is not None:
+            try:
+                fetched = await self._history_provider()
+                recent_messages = [
+                    message
+                    for message in fetched
+                    if str(message.get("body", "")).strip()
+                    and str(message.get("body", "")).strip() != text
+                ][-8:]
+            except Exception:
+                logger.warning(
+                    "Room history unavailable",
+                    extra={"component": "agent", "error_code": "HISTORY_UNAVAILABLE"},
+                )
         try:
-            context = await self._context.build()
+            context = await self._context.build(recent_messages)
         except Exception:
             logger.exception(
                 "Context build failed",
@@ -80,8 +97,18 @@ class AgentOrchestrator:
             )
             return "I couldn't read the stored plan safely. Nothing changed."
 
+        local_today = datetime.now(ZoneInfo(self._settings.timezone)).date()
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self._system_prompt},
+            {
+                "role": "system",
+                "content": (
+                    f"Server local date: {local_today.isoformat()} "
+                    f"({self._settings.timezone}). Trust this date and the "
+                    "context dates map over your own calendar. Do not contradict "
+                    "a tool result."
+                ),
+            },
             {
                 "role": "system",
                 "content": (
@@ -92,6 +119,7 @@ class AgentOrchestrator:
             {"role": "user", "content": text},
         ]
         proposals: list[str] = []
+        proposal_details: list[str] = []
         invalid_count = 0
         proposal_count = 0
 
@@ -104,7 +132,13 @@ class AgentOrchestrator:
             await self._cost.record(response, correlation_id=correlation_id)
 
             if not response.tool_calls:
-                return await self._finalize(response.content, proposals)
+                if not proposals and self._looks_like_plan_request(text):
+                    fallback = await self._fallback_plan(text)
+                    if fallback is not None:
+                        return fallback
+                return await self._finalize(
+                    response.content, proposals, proposal_details
+                )
 
             messages.append(self._assistant_message(response))
             for call in response.tool_calls:
@@ -151,7 +185,7 @@ class AgentOrchestrator:
                     raw_arguments = json.loads(call.arguments or "{}")
                     if not isinstance(raw_arguments, dict):
                         raise ValueError("tool arguments must be an object")
-                    raw_arguments = self._normalize_arguments(call.name, raw_arguments)
+                    raw_arguments = self._normalize_arguments(call.name, raw_arguments, text)
                     result = await self._execute(call.name, raw_arguments)
                 except (json.JSONDecodeError, ValueError):
                     messages.append(
@@ -193,6 +227,9 @@ class AgentOrchestrator:
                     code = result.get("proposal")
                     if isinstance(code, str):
                         proposals.append(code)
+                        detail = self._proposal_detail(call.name, result)
+                        if detail:
+                            proposal_details.append(detail)
                     proposal_count += 1
                 messages.append(
                     {
@@ -210,18 +247,82 @@ class AgentOrchestrator:
                     "Approve or reject the prepared proposal, then continue."
                 )
 
+        if not proposals and self._looks_like_plan_request(text):
+            fallback = await self._fallback_plan(text)
+            if fallback is not None:
+                return fallback
         return (
             "I reached the tool-cycle limit. Any proposals shown are pending; "
             "nothing has been approved."
         )
 
-    def _normalize_arguments(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def _date_from_text(self, text: str) -> date | None:
+        lowered = text.lower()
+        today = datetime.now(ZoneInfo(self._settings.timezone)).date()
+        match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
+        if match:
+            try:
+                return date.fromisoformat(match.group(1))
+            except ValueError:
+                pass
+        if "tomorrow" in lowered:
+            return today + timedelta(days=1)
+        if "today" in lowered:
+            return today
+        for index, name in enumerate(WEEKDAYS):
+            if name in lowered:
+                start = today - timedelta(days=(today.weekday() - index) % 7)
+                if "next week" in lowered:
+                    start += timedelta(days=7)
+                return start
+        return None
+
+    @staticmethod
+    def _time_from_text(text: str) -> time | None:
+        lowered = text.lower()
+        match = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", lowered)
+        if match:
+            return time(int(match.group(1)), int(match.group(2)))
+        match = re.search(r"\b(1[0-2]|0?[1-9])\s*(am|pm)\b", lowered)
+        if match:
+            hour = int(match.group(1)) % 12
+            if match.group(2) == "pm":
+                hour += 12
+            return time(hour, 0)
+        return None
+
+    def _normalize_arguments(
+        self, name: str, arguments: dict[str, Any], text: str = ""
+    ) -> dict[str, Any]:
         """Fill obvious fields derivable from the owner's own values.
 
         This never invents titles or estimates. It prevents a weaker model from
         losing a month commitment merely because it omitted the redundant
-        year/month implied by the deadline.
+        year/month implied by the deadline, and it keeps weekday/date and
+        owner-reported clock-time references deterministic.
         """
+        if name == "plan_day":
+            parsed_date = self._date_from_text(text)
+            if parsed_date is not None:
+                arguments["date"] = parsed_date.isoformat()
+            lowered = text.lower()
+            for battery in ("low", "medium", "high"):
+                if re.search(rf"\b{battery}\b", lowered):
+                    arguments["battery"] = battery
+                    break
+        elif name == "reconcile":
+            parsed_date = self._date_from_text(text)
+            parsed_time = self._time_from_text(text)
+            if parsed_date is not None or parsed_time is not None:
+                local_date = parsed_date or datetime.now(
+                    ZoneInfo(self._settings.timezone)
+                ).date()
+                local_time = parsed_time or datetime.now(
+                    ZoneInfo(self._settings.timezone)
+                ).time().replace(second=0, microsecond=0)
+                arguments["now_iso"] = datetime.combine(
+                    local_date, local_time, tzinfo=ZoneInfo(self._settings.timezone)
+                ).isoformat()
         if name == "add_commitment":
             if arguments.get("priority") is None:
                 arguments["priority"] = "normal"
@@ -275,6 +376,47 @@ class AgentOrchestrator:
         if name == "query":
             return await self._domain.query(QueryRequest.model_validate(arguments))
         raise DomainError("INVALID_INPUT", "Unknown tool.")
+
+    def _looks_like_plan_request(self, text: str) -> bool:
+        lowered = text.lower()
+        if "left this week" in lowered or "what is left" in lowered:
+            return False
+        return (
+            ("plan" in lowered or "schedule" in lowered)
+            and self._date_from_text(text) is not None
+        )
+
+    async def _fallback_plan(self, text: str) -> str | None:
+        parsed_date = self._date_from_text(text)
+        if parsed_date is None:
+            return None
+        lowered = text.lower()
+        battery = next(
+            (value for value in ("low", "medium", "high") if re.search(rf"\b{value}\b", lowered)),
+            None,
+        )
+        if battery is None:
+            return (
+                "What is your battery: low, medium or high? "
+                "Nothing has been changed."
+            )
+        try:
+            result = await self._domain.propose_day(
+                PlanDayRequest(
+                    date=parsed_date,
+                    battery=cast(Literal["low", "medium", "high"], battery),
+                )
+            )
+        except DomainError as exc:
+            return f"{exc.message} (code: {exc.code})"
+        detail = self._proposal_detail("plan_day", result)
+        if not detail:
+            return "I couldn't format that proposal safely. Nothing changed."
+        return (
+            "I prepared a pending proposal. Nothing is changed until approval."
+            "\n\n"
+            + detail
+        )
 
     @staticmethod
     def _assistant_message(response: LLMResponse) -> dict[str, Any]:
@@ -330,7 +472,67 @@ class AgentOrchestrator:
             return any(word in lowered for word in ("resume", "unpark", "back in"))
         return any(word in lowered for word in ("park", "pause", "shelve"))
 
-    async def _finalize(self, content: str, proposals: list[str]) -> str:
+    @staticmethod
+    def _proposal_detail(tool: str, result: dict[str, Any]) -> str:
+        payload = result.get("payload")
+        code = result.get("proposal")
+        if not isinstance(payload, dict) or not isinstance(code, str):
+            return ""
+        if tool == "plan_day":
+            day = date.fromisoformat(str(payload.get("date")))
+            lines = [
+                f"Plan for {day.strftime('%A, %d %B %Y')} "
+                f"({payload.get('battery')} battery):"
+            ]
+            for item in payload.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    f"- {item.get('planned_start_display', '?')}–"
+                    f"{item.get('planned_end_display', '?')} "
+                    f"{str(item.get('disposition', '')).upper()}: "
+                    f"{item.get('task_title', 'task')}"
+                )
+            if payload.get("latest_wake_display"):
+                lines.append(
+                    f"Latest wake: {payload['latest_wake_display']} "
+                    f"(first required start {payload.get('first_required_start_display', '?')})."
+                )
+            lines.append(f"Proposal {code}. Nothing is changed until approval.")
+            return "\n".join(lines)
+        if tool == "reconcile":
+            feasibility = payload.get("feasibility", {})
+            day = date.fromisoformat(str(payload.get("date")))
+            lines = [
+                f"Recovery proposal for {day.strftime('%A, %d %B %Y')}:"
+            ]
+            for item in payload.get("items", []):
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    f"- {item.get('planned_start_display', '?')}–"
+                    f"{item.get('planned_end_display', '?')} "
+                    f"{str(item.get('disposition', '')).upper()}: "
+                    f"{item.get('task_title', 'task')}"
+                )
+            moves = payload.get("moves", [])
+            if moves:
+                lines.append(f"- Move {len(moves)} task(s) within this week.")
+            if isinstance(feasibility, dict) and feasibility.get("status"):
+                lines.append(
+                    f"Week status: {feasibility.get('status')} "
+                    f"({feasibility.get('arithmetic', '')})."
+                )
+            lines.append(f"Proposal {code}. Nothing is changed until approval.")
+            return "\n".join(lines)
+        return ""
+
+    async def _finalize(
+        self,
+        content: str,
+        proposals: list[str],
+        proposal_details: list[str],
+    ) -> str:
         text = content.strip()
         allowed = await self._domain.pending_codes()
         allowed.update(proposals)
@@ -347,6 +549,14 @@ class AgentOrchestrator:
             return (
                 "I couldn't create a valid proposal. Nothing changed. "
                 "Please restate the request."
+            )
+        if proposal_details:
+            # A plan/reconcile block is deterministic and must not be mixed with
+            # the model's potentially wrong weekday/date narrative.
+            text = (
+                "I prepared a pending proposal. Nothing is changed until approval."
+                "\n\n"
+                + "\n\n".join(proposal_details)
             )
         missing = [code for code in proposals if code not in text]
         if missing:

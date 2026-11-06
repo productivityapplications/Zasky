@@ -50,7 +50,7 @@ Test pure domain behavior without Switch or a model:
 ## Phase 1–2 evidence — 2026-11-06
 
 ```bash
-uv run pytest -q                 # 95 passed
+uv run pytest -q                 # 100 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 docker build -t zasky:phase1 .   # success

@@ -59,8 +59,13 @@ approve ZK-XXXX
 @zasky What is left this week?
 ```
 
-The proposal code must be copied exactly from Zasky's message. "Looks good" is
-not an approval.
+The proposal code must be copied exactly from Zasky's message. "Looks good",
+"lock that in", "go ahead" and similar phrases are not approvals. If a proposal
+is pending, Zasky replies with the exact command to use.
+
+Zasky keeps the last eight ordinary room messages as bounded conversational
+context. It does not persist raw room messages in SQLite. A request containing
+"plan" and a date produces a `plan_day` proposal (not a read-only list).
 
 ## Boundaries
 

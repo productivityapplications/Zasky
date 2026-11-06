@@ -7,13 +7,13 @@ prompt marks this payload as untrusted data, never instructions.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
 from zasky.config import Settings
-from zasky.planner.core import week_start_for
+from zasky.planner.core import WEEKDAYS, week_dates, week_start_for
 from zasky.storage.database import Database
 from zasky.storage.models import (
     DayPlan,
@@ -33,7 +33,7 @@ class ContextBuilder:
         self._db = database
         self._settings = settings
 
-    async def build(self) -> str:
+    async def build(self, recent_messages: list[dict[str, object]] | None = None) -> str:
         now = datetime.now(UTC)
         async with self._db.locked_session() as session:
             config = await session.get(OwnerConfig, 1)
@@ -120,10 +120,25 @@ class ContextBuilder:
                 )
             ).scalars().all()
 
+            this_week = {
+                WEEKDAYS[day.weekday()]: day.isoformat()
+                for day in week_dates(week_start)
+            }
+            next_start = week_start + timedelta(days=7)
+            next_week = {
+                WEEKDAYS[day.weekday()]: day.isoformat()
+                for day in week_dates(next_start)
+            }
             payload = {
                 "now_local": local_now.isoformat(),
                 "timezone": str(tz),
                 "week_start": week_start.isoformat(),
+                "dates": {
+                    "today": today.isoformat(),
+                    "tomorrow": (today + timedelta(days=1)).isoformat(),
+                    "this_week": this_week,
+                    "next_week": next_week,
+                },
                 "capacity_pct": config.capacity_pct if config else 65,
                 "buffers": {
                     "morning_prep_min": config.morning_prep_min if config else 30,
@@ -197,6 +212,7 @@ class ContextBuilder:
                     }
                     for proposal in proposals
                 ],
+                "recent_room_messages": (recent_messages or [])[-10:],
             }
         text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         if len(text) > 12_000:
