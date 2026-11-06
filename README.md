@@ -6,13 +6,15 @@ This package is the pre-implementation source of truth for building Zasky with a
 
 ## Implementation status — 2026-11-06
 
-Phases 1–2 are implemented and running in **local staging** against Switch
+Phases 1–3 are implemented and running in **local staging** against Switch
 **0.31.0**. The agent is registered as `zasky`, connected to the configured room,
 and the private health endpoint reports ready. Phase 1 proves the Switch
 transport, owner/room gate, event dedupe, reconnect handling and deterministic
 echo. Phase 2 adds the complete durable schema, Alembic migration, owner
 singleton, append-only audit triggers, schema checks and a restore-tested manual
-SQLite backup. A model and planner are still intentionally absent.
+SQLite backup. Phase 3 adds the deterministic planning domain, seven strict
+tools, proposal/approval lifecycle, capacity arithmetic, day planning, backplan
+and reconcile. Live model calls are still intentionally absent.
 
 ```bash
 # Run directly from the repository (development)

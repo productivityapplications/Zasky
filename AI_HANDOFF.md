@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-06  
-**Project status:** Phases 1–2 implemented; live owner round-trip pending  
-**Current phase:** Phase 2 complete — durable schema and recovery foundation  
-**Next task:** Live Discord round-trip evidence, then Phase 3 domain services and planner.
+**Project status:** Phases 1–3 implemented; live owner round-trip and Phase 4 pending  
+**Current phase:** Phase 3 complete — deterministic domain, seven tools and planner  
+**Next task:** Live Discord round-trip/privacy, then Phase 4 model orchestration when the OpenAI key and data-handling acceptance are available.
 
 ## Current state
 
@@ -15,9 +15,11 @@
 - Operator intake: partially complete. Switch/Discord access, agent registration,
   owner identity, local host and cost caps are verified. OpenAI access, planning
   inputs, demo data and the room privacy setting remain open.
-- Product code: Phase 1 transport/echo and Phase 2 durable schema/migrations/
-  recovery foundation. No domain tools or planner yet.
+- Product code: Phase 1 transport/echo, Phase 2 durable schema/migrations/
+  recovery, and Phase 3 deterministic domain/planner/tool schemas. No live
+  model calls yet.
 - Database schema revision: `b23394c5a105`.
+- Domain tools: exactly seven strict schemas; proposal approval is deterministic.
 - Reference assets: UI reference image not applicable; no frontend in MVP.
 - Demo video: not produced.
 
@@ -39,11 +41,11 @@
 | Preview/staging authority | Local staging only |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `9f6a06c` (Phase 2 checkpoint) |
-| Current Git commit | `9f6a06c` |
+| Deployed commit | Phase 3 checkpoint pending |
+| Current Git commit | Phase 3 checkpoint pending |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 46 tests pass; live owner round-trip pending |
+| Unit/integration/E2E evidence | 78 tests pass; live owner round-trip pending |
 | Demo video | Not produced |
 
 ## Phase 1 evidence
@@ -59,7 +61,7 @@
 - Docker image builds. Container runs as uid `10001`, with a read-only root
   filesystem, `CAP_DROP=ALL`, `no-new-privileges`, and a persistent `./data`
   bind mount.
-- Tests: 46 passed; `ruff` clean; `mypy src` clean.
+- Tests: 78 passed; `ruff` clean; `mypy src` clean.
 - The client accepts the deployed Switch envelope (`event`/`data`), answers
   pings, resumes with cursor/generation, rereads context after `gap`, stops on
   `taken_over`, deduplicates event sequences and posts one deterministic echo.
@@ -82,6 +84,28 @@
 - Encrypted backup automation is intentionally deferred; the manual restore
   proof is the Phase 2 acceptance evidence.
 
+## Phase 3 evidence
+
+- Seven strict tool schemas are defined and tested: `add_commitment`,
+  `place_week`, `plan_day`, `reconcile`, `park_task`, `complete_task`, `query`.
+  Unknown fields are rejected.
+- Deterministic capacity/scheduling/backplan/feasibility code is in
+  `src/zasky/planner/core.py`; no model performs arithmetic.
+- Proposal lifecycle supports record/week/day/reconcile proposals, TTLs, codes,
+  expected-scope revisions, stale/expired/rejected handling and idempotent
+  duplicate approval.
+- Owner-authored goals/commitments/fixed events, five-goal cap, duplicate-title
+  checks, immutable fixed events and commitment-cancellation cascades are
+  enforced.
+- Week placement enforces capacity, ad hoc provenance and in-week dates.
+- Day plans use only active week-pool tasks for the requested date, have exactly
+  one must and at most three items, shape low battery, avoid fixed events and
+  calculate latest wake.
+- Reconcile keeps/moves existing work within the week and reports week holds or
+  at risk with arithmetic.
+- Park/resume/complete, bounded queries and deadline risk are implemented.
+- Tests: **78 passed**; `ruff` clean; `mypy src` clean.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
@@ -100,6 +124,9 @@
 6. **Phase 1 DB reset:** the Phase 1 operations-only DB was backed up and then
    replaced by a fresh migrated Phase 2 DB. No domain data existed. The Switch
    cursor will resume from the server's current position.
+7. **Phase 4 blocker:** no OpenAI key/model verification or provider data
+   acceptance is available yet. The adapter and mock tests can be built, but no
+   live model path may be enabled.
 
 ## Intentional hackathon deferrals
 

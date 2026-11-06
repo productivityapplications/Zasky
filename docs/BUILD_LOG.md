@@ -81,6 +81,35 @@
 - Next: Phase 3 domain services, seven strict tools, proposal lifecycle and
   deterministic planner.
 
+## 2026-11-06 — Phase 3: deterministic domain, seven tools and planner
+
+- Added the seven strict request schemas and tool definitions:
+  `add_commitment`, `place_week`, `plan_day`, `reconcile`, `park_task`,
+  `complete_task`, `query`. Unknown fields are rejected.
+- Added deterministic capacity math: availability windows, fixed-event overlap,
+  transition buffers, 65% budgets, daily/weekly/monthly slack and remaining-week
+  capacity.
+- Added deterministic scheduling, fixed-event avoidance, backplan/latest-wake
+  and week feasibility arithmetic.
+- Added the proposal lifecycle: human-readable codes, 30-minute/24-hour TTLs,
+  expected-scope revisions, stale/expired handling, rejection, duplicate
+  approval idempotency and transactional application.
+- Added owner-authored goal/commitment/fixed-event proposals with five-goal cap,
+  duplicate-title checks, evidence requirement, immutable fixed events and
+  parent-commitment cancellation cascading to week tasks.
+- Added week placement with capacity enforcement, ad hoc provenance rules, date
+  bounds, least-loaded auto-placement and approval.
+- Added day planning with week-pool-only selection, one must, three-task ceiling,
+  low-battery shaping, fixed-event avoidance and backplan.
+- Added reconcile proposals with keep/move/unplaced output, in-week moves and
+  week-holds/at-risk arithmetic.
+- Added immediate park/resume/complete actions with note requirements and
+  idempotent completion, plus read-only bounded queries and deadline risk.
+- Tests: **78 passed**; `ruff check .` clean; `mypy src` clean.
+- Still pending: one real Discord owner message, room privacy, OpenAI access and
+  planning/demo inputs. Phase 4 is blocked on the OpenAI key and provider data
+  acceptance but the adapter can be built against a fake provider.
+
 ## Checkpoint template
 
 ```text

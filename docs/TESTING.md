@@ -50,7 +50,7 @@ Test pure domain behavior without Switch or a model:
 ## Phase 1–2 evidence — 2026-11-06
 
 ```bash
-uv run pytest -q                 # 46 passed
+uv run pytest -q                 # 78 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 docker build -t zasky:phase1 .   # success
@@ -67,7 +67,11 @@ duplicate sequences, heartbeat pong, gap context reread, reconnect cursor/
 generation, `taken_over`, database state/ledger behavior, configuration
 validation, health responses, the single-writer lock, owner seeding, scope
 revisions, audit writes, migration upgrade/check/downgrade, append-only audit
-triggers, online backup, restore integrity, foreign-key checks and retention.
+triggers, online backup, restore integrity, foreign-key checks, retention, the
+seven strict tool schemas, goal/commitment limits, capacity and slack, week
+placement, day-plan one-must/three-max, low battery, backplan, fixed-event
+avoidance, proposal stale/expired/reject/duplicate approval, park/resume/
+complete, deadline risk and reconcile arithmetic.
 
 Still pending for Phase 1 acceptance: one real owner message in the private
 Discord room and a reply in that room, plus confirmation that the room is
