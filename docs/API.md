@@ -2,6 +2,11 @@
 
 There is no public product REST API in the MVP. The agent's public interface is the Switch room. Internal domain functions are exposed to the model as exactly seven strict tools. Only the application may call these functions after inbound owner authorization.
 
+**Staging provider note (2026-11-06):** the model adapter uses OpenRouter's
+OpenAI-compatible Chat Completions endpoint with `openai/gpt-4o-mini`, chosen
+explicitly by the operator. Tool names, schemas and authority are unchanged.
+The deterministic approval command parser remains outside the model.
+
 ## Common rules
 
 - The application injects trusted `owner_id`, allowed room, current time, DB session and proposal context. These are never model arguments.

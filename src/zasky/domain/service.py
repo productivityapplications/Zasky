@@ -875,10 +875,23 @@ class DomainService:
                 items.append(
                     {
                         "task_id": task.id,
+                        "task_title": task.title,
                         "position": position,
                         "disposition": "must" if position == 1 else "should",
                         "planned_start_utc": block.start_utc.isoformat(),
                         "planned_end_utc": block.end_utc.isoformat(),
+                        "planned_start_local": block.start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat(),
+                        "planned_end_local": block.end_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat(),
+                        "planned_start_display": block.start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M"),
+                        "planned_end_display": block.end_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M"),
                         "planned_est_min": block.est_min,
                     }
                 )
@@ -904,6 +917,18 @@ class DomainService:
                     "unplaced": unplaced,
                     "first_required_start_utc": plan.first_required_start_utc.isoformat(),
                     "latest_wake_utc": plan.latest_wake_utc.isoformat(),
+                    "first_required_start_local": plan.first_required_start_utc.astimezone(
+                        ZoneInfo(config.timezone)
+                    ).isoformat(),
+                    "latest_wake_local": plan.latest_wake_utc.astimezone(
+                        ZoneInfo(config.timezone)
+                    ).isoformat(),
+                    "first_required_start_display": plan.first_required_start_utc.astimezone(
+                        ZoneInfo(config.timezone)
+                    ).strftime("%H:%M"),
+                    "latest_wake_display": plan.latest_wake_utc.astimezone(
+                        ZoneInfo(config.timezone)
+                    ).strftime("%H:%M"),
                     "morning_prep_min": plan.morning_prep_min,
                     "commute_buffer_min": plan.commute_buffer_min,
                 },
@@ -1053,6 +1078,7 @@ class DomainService:
             ranked = sorted(
                 candidates,
                 key=lambda pair: (
+                    0 if pair[0].scheduled_date == local_date else 1,
                     _PRIORITY.get(
                         pair[1].priority if pair[1] is not None else "normal", 1
                     ),
@@ -1126,10 +1152,23 @@ class DomainService:
                 items.append(
                     {
                         "task_id": task.id,
+                        "task_title": task.title,
                         "position": position,
                         "disposition": "must" if position == 1 else "should",
                         "planned_start_utc": block.start_utc.isoformat(),
                         "planned_end_utc": block.end_utc.isoformat(),
+                        "planned_start_local": block.start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat(),
+                        "planned_end_local": block.end_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat(),
+                        "planned_start_display": block.start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M"),
+                        "planned_end_display": block.end_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M"),
                         "planned_est_min": block.est_min,
                     }
                 )
@@ -1175,6 +1214,34 @@ class DomainService:
                     "latest_wake_utc": (
                         plan.latest_wake_utc.isoformat() if plan else None
                     ),
+                    "first_required_start_local": (
+                        plan.first_required_start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat()
+                        if plan
+                        else None
+                    ),
+                    "latest_wake_local": (
+                        plan.latest_wake_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).isoformat()
+                        if plan
+                        else None
+                    ),
+                    "first_required_start_display": (
+                        plan.first_required_start_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M")
+                        if plan
+                        else None
+                    ),
+                    "latest_wake_display": (
+                        plan.latest_wake_utc.astimezone(
+                            ZoneInfo(config.timezone)
+                        ).strftime("%H:%M")
+                        if plan
+                        else None
+                    ),
                 },
                 expected_scopes=[
                     f"day:{local_date.isoformat()}",
@@ -1194,7 +1261,12 @@ class DomainService:
         self, session: AsyncSession, payload: dict[str, Any], actor_id: str
     ) -> dict[str, Any]:
         local_date = date.fromisoformat(str(payload["date"]))
+        selected_ids = {item["task_id"] for item in payload.get("items", [])}
         for move in payload.get("moves", []):
+            if move["task_id"] in selected_ids:
+                raise DomainError(
+                    "PROPOSAL_STALE", "A task was both kept and moved."
+                )
             task = await session.get(WeekTask, move["task_id"])
             if task is None or task.status != "active":
                 raise DomainError(
@@ -1202,6 +1274,14 @@ class DomainService:
                 )
             task.scheduled_date = date.fromisoformat(str(move["to_date"]))
             task.updated_at = _now()
+        # Keeping overdue work today is a date change authorized by the
+        # approved reconcile proposal, so align the task before day-plan items
+        # are validated.
+        for item in payload.get("items", []):
+            task = await session.get(WeekTask, item["task_id"])
+            if task is not None and task.scheduled_date != local_date:
+                task.scheduled_date = local_date
+                task.updated_at = _now()
         first_start = (
             datetime.fromisoformat(str(payload["first_required_start_utc"]))
             if payload.get("first_required_start_utc")
@@ -1588,6 +1668,17 @@ class DomainService:
 
     # --------------------------------------------------------- proposal approval
 
+    async def pending_codes(self) -> set[str]:
+        async with self._db.locked_session() as session:
+            rows = (
+                await session.execute(
+                    select(PendingProposal.code).where(
+                        PendingProposal.status == "pending"
+                    )
+                )
+            ).scalars().all()
+            return set(rows)
+
     async def resolve_proposal(
         self,
         *,
@@ -1624,6 +1715,7 @@ class DomainService:
                 return {
                     "ok": True,
                     "already": "approved",
+                    "status": "approved",
                     "proposal": proposal.code,
                 }
             now = _now()

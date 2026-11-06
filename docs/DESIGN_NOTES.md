@@ -63,5 +63,20 @@ No changes applied yet.
 
 These are layout examples, not fabricated state. The system fills them from actual stored/calculated data.
 
+## Staging implementation notes (2026-11-06)
+
+- The model-facing adapter uses OpenRouter Chat Completions with
+  `openai/gpt-4o-mini`; the actual UI remains Discord through Switch.
+- Proposal messages show one code and one exact command. The deterministic
+  approval reply is separate from model text.
+- Tool results include `*_display` local times and `task_title`; the prompt tells
+  the model to use them verbatim to avoid UTC/local or title substitution errors.
+- The model may prepare at most two proposals per inbound message; the tool loop
+  is capped at five cycles.
+- Plain text approval commands remain the fallback; no buttons/components are
+  required for the MVP.
+- The local demo is a protocol/transcript render, not a Discord screen capture;
+  this is stated on every slide and in the narration.
+
 ## Intentional exclusions
 No website shell, dashboard, mockup, UI reference imagery, footer, web metadata, app icon or `stageshow` skill installation. Reconsider only after an explicit product scope change.

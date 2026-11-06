@@ -1,5 +1,14 @@
 # Zasky — Architecture and Technical Design
 
+> **Implementation adjustment — 2026-11-06.** The operator explicitly selected
+> OpenRouter's OpenAI-compatible **Chat Completions** endpoint and
+> `openai/gpt-4o-mini` for the hackathon staging build, instead of the OpenAI
+> Responses API. The seven-tool contract, deterministic domain authority,
+> owner/room gate, cost caps and approval parser are unchanged. The provider
+> adapter is isolated in `src/zasky/integrations/openrouter/`; no model gains
+> state, approval or arithmetic authority. This is a documented provider
+> substitution, not a product-scope change.
+
 **Status:** Proposed fixed implementation architecture  
 **Date:** 2026-11-05
 

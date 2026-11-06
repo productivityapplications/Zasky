@@ -119,6 +119,19 @@ class QueryRequest(StrictModel):
     entity_id: str | None = None
 
 
+def add_commitment_schema() -> dict[str, Any]:
+    """Expose every field as required so the model supplies conditional data.
+
+    The Pydantic request still validates per entry type. Making the fields
+    visible as required prevents the common omission of year/month for a month
+    commitment while keeping nulls valid for irrelevant fields.
+    """
+    schema = AddCommitmentRequest.model_json_schema()
+    properties = schema.get("properties", {})
+    schema["required"] = sorted(properties.keys())
+    return schema
+
+
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -128,7 +141,7 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "commitment or fixed event. Returns a record proposal; nothing is "
             "written until exact owner approval."
         ),
-        "parameters": AddCommitmentRequest.model_json_schema(),
+        "parameters": add_commitment_schema(),
     },
     {
         "type": "function",

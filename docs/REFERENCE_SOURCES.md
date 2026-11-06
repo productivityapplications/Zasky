@@ -24,7 +24,18 @@ The handoff documents are the project source of truth. These external references
    https://docs.switchagents.ai/switch-rooms/resources/working-safely-with-agents  
    Apply least privilege and controls around untrusted room content and tool access.
 
-## OpenAI
+## OpenRouter (selected staging provider)
+
+1. **Chat Completions API**  
+   `https://openrouter.ai/docs/api-reference/overview` — OpenAI-compatible
+   `/api/v1/chat/completions`; tools use the standard function-calling shape.
+2. **Model page**  
+   `https://openrouter.ai/openai/gpt-4o-mini` — availability and list pricing.
+3. **Pricing at intake (2026-11-06)**  
+   `openai/gpt-4o-mini`: **$0.15 / 1M input tokens**, **$0.60 / 1M output
+   tokens**. Re-check before any price change; the app hard-stops at $20/month.
+
+## OpenAI (reference only; not used by the staging adapter)
 
 1. **Assistants migration / sunset notice**  
    https://developers.openai.com/api/docs/assistants/migration  

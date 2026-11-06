@@ -6,7 +6,7 @@ This package is the pre-implementation source of truth for building Zasky with a
 
 ## Implementation status — 2026-11-06
 
-Phases 1–3 are implemented and running in **local staging** against Switch
+Phases 1–9 are implemented and verified in **local staging** against Switch
 **0.31.0**. The agent is registered as `zasky`, connected to the configured room,
 and the private health endpoint reports ready. Phase 1 proves the Switch
 transport, owner/room gate, event dedupe, reconnect handling and deterministic
@@ -14,7 +14,15 @@ echo. Phase 2 adds the complete durable schema, Alembic migration, owner
 singleton, append-only audit triggers, schema checks and a restore-tested manual
 SQLite backup. Phase 3 adds the deterministic planning domain, seven strict
 tools, proposal/approval lifecycle, capacity arithmetic, day planning, backplan
-and reconcile. Live model calls are still intentionally absent.
+and reconcile. Phase 4 connects the bounded tool loop to the operator-selected
+OpenRouter Chat Completions endpoint (`openai/gpt-4o-mini`) with hard request
+and spend caps.
+
+The runtime intentionally uses **OpenRouter's OpenAI-compatible Chat
+Completions** format rather than the OpenAI Responses API. This was an explicit
+operator decision recorded in `AI_HANDOFF.md` and `docs/BUILD_LOG.md`; the
+seven-tool surface, deterministic approval parser and domain authority are
+unchanged.
 
 ```bash
 # Run directly from the repository (development)
@@ -24,7 +32,24 @@ ZASKY_ENV_FILE=/root/Zasky-secrets/zasky.env uv run zasky
 docker compose up -d
 docker compose ps
 curl -sS http://127.0.0.1:8099/health/ready
+# {"status":"ready","database":"ok","switch":"connected","schema":"current","model":"configured"}
 ```
+
+Once the Discord bridge/room is private, test with a message addressed to the
+agent, for example:
+
+```text
+@zasky What is my plan for Friday?
+```
+
+The local protocol/transcript demo is in `artifacts/demo/`:
+
+- `zasky-demo.mp4` — 97 seconds, 1280×720, local TTS, real OpenRouter/tool
+  transcript, synthetic data, explicitly labeled **not a Discord screen capture**.
+- `narration-script.md`, `production-notes.md`, `demo-seed.md`, `transcript.txt`.
+
+It is honest about the headless-host limitation: Switch is connected separately,
+but the demo video renders the real model/tool/approval transcript.
 
 Secrets live outside the repository in `/root/Zasky-secrets/zasky.env` with mode
 `0600`. `.env.example` documents the required names; no real values belong in Git.

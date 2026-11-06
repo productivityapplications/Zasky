@@ -13,6 +13,7 @@ import logging
 import random
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -20,6 +21,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import websockets
 from pydantic import ValidationError
 
+from zasky.access.approvals import ApprovalCommand, parse_approval_command
 from zasky.access.policy import authorize_message
 from zasky.config import Settings
 from zasky.storage.database import Database
@@ -35,6 +37,9 @@ from zasky.switch.events import (
 from zasky.switch.operations import SwitchOperations, SwitchOperationsError
 
 logger = logging.getLogger(__name__)
+
+MessageHandler = Callable[[MessageEvent], Awaitable[str]]
+ApprovalHandler = Callable[[ApprovalCommand, MessageEvent], Awaitable[tuple[str, str]]]
 
 
 class SwitchProtocolError(RuntimeError):
@@ -54,11 +59,15 @@ class SwitchClient:
         settings: Settings,
         database: Database,
         operations: SwitchOperations | None = None,
+        message_handler: MessageHandler | None = None,
+        approval_handler: ApprovalHandler | None = None,
     ) -> None:
         self._settings = settings
         self._db = database
         self._ops = operations or SwitchOperations(settings)
         self._owns_ops = operations is None
+        self._message_handler = message_handler
+        self._approval_handler = approval_handler
 
         self._stop = asyncio.Event()
         self._terminal = False
@@ -442,8 +451,78 @@ class SwitchClient:
             )
             return
 
-        reply = build_echo_reply(event.data.payload.body)
-        outcome = "replied"
+        command = parse_approval_command(event.data.payload.body)
+        if command is not None:
+            reply: str
+            outcome = "approval_applied"
+            if self._approval_handler is None:
+                reply = "Approval handling is not enabled. Nothing changed."
+                outcome = "failed"
+            else:
+                try:
+                    reply, outcome = await self._approval_handler(command, event)
+                except Exception:
+                    logger.exception(
+                        "Approval handler failed",
+                        extra={
+                            "component": "access",
+                            "event_sequence": sequence,
+                            "error_code": "APPROVAL_HANDLER_FAILED",
+                        },
+                    )
+                    reply = "I couldn't resolve that proposal. Nothing changed."
+                    outcome = "failed"
+            try:
+                await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
+                await self._ops.post_message(reply)
+            except (TimeoutError, SwitchOperationsError) as exc:
+                outcome = "failed"
+                logger.error(
+                    "Approval reply failed",
+                    extra={
+                        "component": "switch",
+                        "event_sequence": sequence,
+                        "outcome": "failed",
+                        "error_code": type(exc).__name__,
+                    },
+                )
+            await self._db.finish_event(
+                agent_id=self._settings.switch_agent_id,
+                sequence=sequence,
+                connection_id=self._settings.switch_connection_id,
+                outcome=outcome,
+                generation=self._generation,
+                protocol_revision=self._protocol_revision,
+            )
+            self._highest_processed = max(self._highest_processed, sequence)
+            logger.info(
+                "Approval command processed",
+                extra={
+                    "component": "access",
+                    "event_sequence": sequence,
+                    "outcome": outcome,
+                },
+            )
+            return
+
+        if self._message_handler is None:
+            reply = build_echo_reply(event.data.payload.body)
+            outcome = "replied"
+        else:
+            outcome = "replied"
+            try:
+                reply = await self._message_handler(event)
+            except Exception:
+                logger.exception(
+                    "Message handler failed",
+                    extra={
+                        "component": "agent",
+                        "event_sequence": sequence,
+                        "error_code": "MESSAGE_HANDLER_FAILED",
+                    },
+                )
+                reply = "I couldn't process that safely. No planning data changed."
+                outcome = "failed"
         try:
             await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
             await self._ops.post_message(reply)

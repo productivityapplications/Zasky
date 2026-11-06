@@ -110,6 +110,59 @@
   planning/demo inputs. Phase 4 is blocked on the OpenAI key and provider data
   acceptance but the adapter can be built against a fake provider.
 
+## 2026-11-06 — Phase 4–8: OpenRouter, live E2E, chat UX, docs and demo
+
+- Applied the operator's explicit provider-change authorization: OpenRouter
+  OpenAI-compatible **Chat Completions**, model `openai/gpt-4o-mini`, pricing
+  `$0.15/$0.60` per 1M input/output, `$20` monthly cap and `100` requests/day.
+  The seven tools, deterministic domain and approval parser are unchanged.
+- Implemented the bounded model/tool loop: max five cycles, max two proposals
+  per message, strict Pydantic validation, tool error relay, hallucinated-code
+  rejection, status-action intent guard and transparent provider errors.
+- Added the cost/request guard with month-to-date and daily counters. Demo
+  model calls consumed 7 requests and **$0.003779** in the isolated demo DB;
+  staging remains at $0.
+- Added minimal context (goals, commitments, fixed events, week pool, today's
+  plan, pending proposal codes, display-time fields) with no participant/room
+  IDs or raw room history.
+- Live evidence: normal prose and tool calls worked; a real goal → commitment →
+  week placement → day plan chain produced and approved proposals; a real
+  query → reconcile → approve → query chain produced
+  `artifacts/demo/transcript.txt`.
+- Prompt-injection probe asking for system prompt, API key and room ID was
+  refused. Unauthorized event tests prove handlers are never called for wrong
+  room, wrong sender or unaddressed messages.
+- Chat UX refined: concise mobile-first structure, exact proposal codes,
+  "Nothing is changed until approval", local display times, exact task titles,
+  explicit week feasibility arithmetic and transparent failure messages.
+- Documentation updated for the provider adjustment, local staging, model caps,
+  operator commands, backup/restore and demo limitations.
+- Produced `artifacts/demo/zasky-demo.mp4` (97s, H.264/AAC, 1280×720) with
+  `espeak-ng` narration. It is a real-model **local protocol/transcript** demo,
+  not a Discord screen capture, and is labeled as such.
+- Tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+- Remaining blockers: Discord room is still `channel_public`; no app-level live
+  Discord owner message has been observed by this container. The user has been
+  asked to test in Discord. Production release is not authorized.
+
+## 2026-11-06 — Phase 9: final regression and release checklist
+
+- Final tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+- Secret scan of tracked/candidate files found no API keys, bearer tokens or
+  real owner/room IDs. `.env` remains untracked and mode `0600` outside the repo.
+- Final online backup `zasky-20261106T144317Z.db` restored to an isolated target:
+  integrity `ok`, 0 foreign-key violations, 17 tables, 3 goals, 3 commitments,
+  6 week tasks, 2 day-plan items, schema `b23394c5a105`.
+- Staging health: `{"status":"ready","database":"ok","switch":"connected",
+  "schema":"current","model":"configured"}`.
+- Demo video: 97.19s, 1280×720 H.264/AAC, local TTS, real model/tool transcript,
+  synthetic data, explicitly labeled not a Discord screen capture.
+- Final release state: **verified-staging-awaiting-authorized-release**.
+- Remaining limitations: Discord room is still `channel_public`; the running
+  container has not logged an app-level live Discord owner message. No production
+  deployment is authorized. The transcript demo is not a substitute for the live
+  Discord round-trip; both limitations are stated in the handoff and docs.
+
 ## Checkpoint template
 
 ```text

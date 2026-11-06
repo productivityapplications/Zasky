@@ -16,7 +16,7 @@
 | SQLite locked | Multiple writers or long transaction | Confirm one process; shorten transaction; use configured busy timeout; investigate WAL health |
 | Database missing after restart | Volume not mounted or wrong DB path | Stop writes, inspect mounts and paths, restore verified backup only after confirmation |
 | Reminder duplicates | Scheduler idempotency not enforced | Verify unique `(local_date,type)` key and transaction |
-| Model errors | Quota, unsupported model, network, schema mismatch | Verify model capability and account; bounded retry; use clear unavailable response |
+| Model errors | OpenRouter quota/key/model/network/schema mismatch | Verify `OPENAI_BASE_URL`, model ID, key presence without printing it; check provider status; bounded retry; clear unavailable response |
 | Spend cap reached | Monthly hard limit | Stop model calls; do not silently raise cap; operator must authorize changed cap |
 | Backup fails | Disk full, encryption key unavailable or SQLite copied unsafely | Preserve DB, free only safe space, use SQLite online backup/checkpoint process; retest restore |
 | `gap` event received | Switch could not replay full continuity | Reread room context; do not interpret old events as fresh commands |

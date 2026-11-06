@@ -2,7 +2,7 @@
 
 **Maximum:** 180 seconds  
 **Target:** 120–150 seconds  
-**Status:** Planned; create only after the E2E functionality gate passes.
+**Status:** Produced 2026-11-06. The headless-host limitation was handled as a **local protocol/transcript demo**, explicitly labeled; no fabricated Discord UI. Final file: `artifacts/demo/zasky-demo.mp4` (97 seconds).
 
 ## Story
 
@@ -54,13 +54,19 @@ Target duration: approximately 132 seconds. Re-time after actual recording; neve
 - If Google AI TTS is unavailable or paid, use a genuinely free, permitted local TTS or operator-recorded narration. Record the substitution.
 - Do not use an unlicensed voice clone or upload private user recordings.
 
-## Deliverables
+## Produced deliverables
 
-- `zasky-demo.mp4`
-- `narration-script.md`
-- `production-notes.md`
-- `demo-seed.md` (synthetic data outline; no secrets)
-- Capture source/project if practical
+- `artifacts/demo/zasky-demo.mp4` — 97 seconds, 1280×720, H.264/AAC
+- `artifacts/demo/narration-script.md`
+- `artifacts/demo/production-notes.md`
+- `artifacts/demo/demo-seed.md`
+- `artifacts/demo/transcript.txt`
+- `scripts/seed_demo.py`, `scripts/demo_transcript.py`,
+  `scripts/build_demo_video.py`
+
+The demo uses the real OpenRouter model and the real seven-tool/domain path, but
+renders a transcript rather than a Discord window. This is stated on every slide
+and in the narration.
 
 ## Final verification checklist
 

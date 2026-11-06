@@ -327,3 +327,121 @@ async def test_taken_over_is_terminal(
     await wait_until(lambda: client.connection_status == "terminal")
     await asyncio.sleep(0.3)
     assert task.done()
+
+
+@pytest.mark.asyncio
+async def test_approval_command_bypasses_message_handler(tmp_path, settings: Settings) -> None:
+    fake = FakeSwitchServer()
+    await fake.start()
+    http_client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fake.http_app()),
+        base_url="http://switch.test",
+    )
+    db = Database(f"sqlite+aiosqlite:///{tmp_path / 'approval.db'}")
+    await db.init()
+    calls: list[tuple[str, str]] = []
+
+    async def message_handler(event):
+        calls.append(("message", event.data.payload.body))
+        return "model path"
+
+    async def approval_handler(command, event):
+        calls.append(("approval", command.code or "none"))
+        return ("Approved ZK-ABCD. No further changes.", "approval_applied")
+
+    test_settings = settings.model_copy(
+        update={
+            "switch_ws_url": f"ws://127.0.0.1:{fake.port}/agents/agent-1/connection/ws",
+            "switch_reconnect_min_seconds": 0.05,
+            "switch_reconnect_max_seconds": 0.2,
+        }
+    )
+    client = SwitchClient(
+        test_settings,
+        db,
+        SwitchOperations(test_settings, client=http_client),
+        message_handler=message_handler,
+        approval_handler=approval_handler,
+    )
+    task = asyncio.create_task(client.run())
+    try:
+        websocket = await fake.next_connection()
+        await websocket.send(connection_state())
+        await wait_until(lambda: client.is_ready)
+        await websocket.send(message_frame(1, body="approve ZK-ABCD"))
+        await wait_until(lambda: len(calls) == 1)
+        await wait_until(lambda: len(fake.posts) == 1)
+
+        assert calls == [("approval", "ZK-ABCD")]
+        assert fake.posts[0].startswith("Approved ZK-ABCD")
+        assert await db.get_event_outcome("agent-1", 1) == "approval_applied"
+    finally:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(client.close(), timeout=3)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(http_client.aclose(), timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(fake.stop(), timeout=4)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(db.close(close_connections=False), timeout=3)
+        await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_events_never_reach_message_handler(
+    tmp_path, settings: Settings
+) -> None:
+    fake = FakeSwitchServer()
+    await fake.start()
+    http_client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fake.http_app()),
+        base_url="http://switch.test",
+    )
+    db = Database(f"sqlite+aiosqlite:///{tmp_path / 'unauthorized.db'}")
+    await db.init()
+    calls: list[str] = []
+
+    async def message_handler(event):
+        calls.append(event.data.payload.body)
+        return "must not run"
+
+    test_settings = settings.model_copy(
+        update={
+            "switch_ws_url": f"ws://127.0.0.1:{fake.port}/agents/agent-1/connection/ws",
+            "switch_reconnect_min_seconds": 0.05,
+            "switch_reconnect_max_seconds": 0.2,
+        }
+    )
+    client = SwitchClient(
+        test_settings,
+        db,
+        SwitchOperations(test_settings, client=http_client),
+        message_handler=message_handler,
+    )
+    task = asyncio.create_task(client.run())
+    try:
+        websocket = await fake.next_connection()
+        await websocket.send(connection_state())
+        await wait_until(lambda: client.is_ready)
+        await websocket.send(message_frame(1, room_id="other-room"))
+        await websocket.send(message_frame(2, sender="@stranger:test"))
+        await websocket.send(message_frame(3, addressed=False))
+        await asyncio.sleep(0.3)
+        assert calls == []
+        assert fake.posts == []
+    finally:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(client.close(), timeout=3)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(http_client.aclose(), timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(fake.stop(), timeout=4)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(db.close(close_connections=False), timeout=3)
+        await asyncio.sleep(0.2)

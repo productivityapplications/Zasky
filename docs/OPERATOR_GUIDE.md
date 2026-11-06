@@ -39,6 +39,29 @@ When parking, provide a resume note: where you stopped and the next concrete act
 
 Morning/evening reminders can be disabled. If enabled, they are sent at configured local times and at most once per type/day. A long outage may cause a reminder to be skipped rather than sent late.
 
+## Staging configuration (2026-11-06)
+
+- Timezone: Africa/Lagos.
+- Week start: Monday.
+- Capacity: 65% of 09:00–21:00 availability every day.
+- Buffers: 30 min morning prep, 0 min commute, 10 min transition.
+- Model: `openai/gpt-4o-mini` through OpenRouter Chat Completions.
+- Caps: $20/month and 100 requests/day. At the cap the model path stops; the
+  deterministic approval parser, health checks and stored data remain available.
+- Synthetic demo data is seeded in the staging database for testing.
+
+## Test messages
+
+```text
+@zasky What is my plan for Friday?
+@zasky Back. A two-hour call ran over; it's 4pm on Friday.
+approve ZK-XXXX
+@zasky What is left this week?
+```
+
+The proposal code must be copied exactly from Zasky's message. "Looks good" is
+not an approval.
+
 ## Boundaries
 
 Zasky cannot stop you scrolling, control your sleep, guarantee that a deadline will be met or prevent service outages. It can preserve the plan, show the consequences and make the return path short.

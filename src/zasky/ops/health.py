@@ -39,6 +39,7 @@ def create_health_app(app: ZaskyApp) -> FastAPI:
             "database": "ok" if database_ok else "unavailable",
             "switch": "connected" if switch_ok else "disconnected",
             "schema": "current" if schema_ok else "pending",
+            "model": "configured" if app.model_ready else "disabled",
         }
 
     return health

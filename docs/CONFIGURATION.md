@@ -17,19 +17,20 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `SWITCH_WS_URL` | No | Explicit WebSocket URL override; normally derived from `SWITCH_BASE_URL` and `SWITCH_AGENT_ID` | Server-only; `ws://` or `wss://` |
 | `SWITCH_RECONNECT_MIN_SECONDS` | No | Initial reconnect backoff; default 1 | Bounded positive number |
 | `SWITCH_RECONNECT_MAX_SECONDS` | No | Maximum reconnect backoff; default 30 | Bounded positive number |
-| `OPENAI_API_KEY` | Yes for model | Responses API credential | Secret |
-| `OPENAI_MODEL` | Yes for model | Verified supported model ID | Server-only |
-| `OPENAI_MAX_INPUT_TOKENS` | Yes | Maximum constructed request input tokens; cap context before cost reservation | Positive bounded integer |
+| `OPENAI_API_KEY` | Yes for model | OpenRouter credential | Secret |
+| `OPENAI_BASE_URL` | Yes for model | OpenRouter OpenAI-compatible base URL; default `https://openrouter.ai/api/v1` | Server-only; HTTPS |
+| `OPENAI_MODEL` | Yes for model | Verified model ID; default `openai/gpt-4o-mini` | Server-only |
+| `OPENAI_MAX_INPUT_TOKENS` | Yes | Maximum constructed request input tokens; bounds worst-case cost | Positive bounded integer |
 | `OPENAI_MAX_OUTPUT_TOKENS` | Yes | Maximum generated output tokens per request | Positive bounded integer |
-| `OPENAI_STORE` | No | Provider storage behavior if supported; default false where available | Server-only; verify current API semantics |
+| `OPENAI_STORE` | No | Provider storage flag if supported; default false | Server-only |
 | `MAX_LLM_REQUESTS_PER_DAY` | Yes | Daily request hard ceiling | Positive integer; operator may lower |
 | `MAX_LLM_SPEND_USD_MONTH` | Yes | Monthly spend hard ceiling | Required before enabling paid model |
-| `OPENAI_INPUT_USD_PER_1M` | Yes for local cost enforcement | Verified input-token price per 1M tokens | Required; from current provider pricing, not a guessed value |
-| `OPENAI_OUTPUT_USD_PER_1M` | Yes for local cost enforcement | Verified output-token price per 1M tokens | Required; from current provider pricing, not a guessed value |
+| `OPENAI_INPUT_USD_PER_1M` | Yes for local cost enforcement | Input price per 1M tokens; configured `0.15` for gpt-4o-mini | Required; verified pricing source/date |
+| `OPENAI_OUTPUT_USD_PER_1M` | Yes for local cost enforcement | Output price per 1M tokens; configured `0.60` for gpt-4o-mini | Required; verified pricing source/date |
 | `OPENAI_PRICE_EFFECTIVE_DATE` | Yes | Effective date/source version for configured price schedule | Required for auditability |
-| `TIMEZONE` | Yes | IANA zone, provisional `Africa/Lagos` | Server-only |
+| `TIMEZONE` | Yes | IANA zone; confirmed `Africa/Lagos` | Server-only |
 | `CAPACITY_PCT` | Yes | Weekly capacity reserve setting; default 65 | Integer 60–70 |
-| `WEEK_START_DAY` | Yes | Weekly boundary convention; Monday recommended | Valid weekday; confirmed at intake |
+| `WEEK_START_DAY` | Yes | Weekly boundary convention; confirmed Monday | Valid weekday |
 | `DAILY_TASK_LIMIT` | Yes | Daily selected-task cap; fixed at 3 | Do not raise without product revision |
 | `TRANSITION_BUFFER_MIN` | Yes | Buffer between blocks; candidate 10 | Non-negative integer |
 | `MORNING_PREP_MIN` | Yes | Time needed after waking before first required start | Non-negative integer, owner-confirmed |
@@ -52,6 +53,7 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 - Redact environment dumps, exception traces and CI output.
 
 ## Cost controls
+- Provider decision: the operator explicitly selected OpenRouter Chat Completions rather than the OpenAI Responses API for this hackathon build. The seven-tool contract is unchanged.
 - No paid service enabled until the operator records a cap.
 - Before each provider call, reserve its upper-bound cost (bounded input + maximum output at the verified pricing schedule); settle against provider usage. Keep unknown outcomes reserved until reconciled. Warn at 80% of monthly model budget; hard-stop new model calls at 100%.
 - VPS and AI cost together must remain below the operator's total monthly cap.

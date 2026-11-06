@@ -10,13 +10,21 @@ from pathlib import Path
 import uvicorn
 from sqlalchemy.engine import make_url
 
+from zasky.access.approvals import ApprovalCommand
+from zasky.agent.context import ContextBuilder
+from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
+from zasky.domain.errors import DomainError
+from zasky.domain.service import DomainService
+from zasky.integrations.openrouter.client import OpenRouterClient
+from zasky.integrations.openrouter.usage import CostGuard
 from zasky.ops.health import create_health_app
 from zasky.ops.lock import SingleWriterLock
 from zasky.ops.maintenance import head_revision
 from zasky.storage.database import Database
 from zasky.storage.repositories import OwnerConfigRepository
 from zasky.switch.client import SwitchClient
+from zasky.switch.events import MessageEvent
 from zasky.switch.operations import SwitchOperations
 
 logger = logging.getLogger(__name__)
@@ -27,7 +35,27 @@ class ZaskyApp:
         self.settings = settings
         self.db = Database.from_settings(settings)
         self.ops = SwitchOperations(settings)
-        self.switch = SwitchClient(settings, self.db, self.ops)
+        self.domain = DomainService(self.db, settings)
+        self.llm: OpenRouterClient | None = None
+        self.orchestrator: AgentOrchestrator | None = None
+        if settings.llm_enabled:
+            self.llm = OpenRouterClient(settings)
+            self.orchestrator = AgentOrchestrator(
+                settings,
+                self.domain,
+                self.llm,
+                ContextBuilder(self.db, settings),
+                CostGuard(self.db, settings),
+            )
+        self.switch = SwitchClient(
+            settings,
+            self.db,
+            self.ops,
+            message_handler=(
+                self.orchestrator.handle_message if self.orchestrator else None
+            ),
+            approval_handler=self._handle_approval,
+        )
         self.health_app = create_health_app(self)
 
         database_path = make_url(settings.database_url).database
@@ -95,9 +123,46 @@ class ZaskyApp:
                 await task
         self._switch_task = None
         self._health_task = None
+        if self.llm is not None:
+            await self.llm.close()
         await self.db.close()
         await self.ops.close()
         self._lock.release()
+
+    @property
+    def model_ready(self) -> bool:
+        return self.orchestrator is not None
+
+    async def _handle_approval(
+        self, command: ApprovalCommand, event: MessageEvent
+    ) -> tuple[str, str]:
+        try:
+            result = await self.domain.resolve_proposal(
+                action=command.action,
+                code=command.code,
+                actor_id=event.data.payload.sender,
+                room_id=event.data.room_id,
+            )
+        except DomainError as exc:
+            return (f"{exc.message} (code: {exc.code})", "failed")
+        code = result.get("proposal", command.code or "proposal")
+        if result.get("status") == "approved":
+            return (
+                f"Approved {code}. The change is now stored. "
+                f"Approve {code} / Reject {code}",
+                "approval_applied",
+            )
+        if result.get("status") == "rejected":
+            return (
+                f"Rejected {code}. No planning changes were applied.",
+                "approval_applied",
+            )
+        if result.get("already") == "approved":
+            return (
+                f"{code} was already approved. No further changes were made.",
+                "approval_applied",
+            )
+        return (f"Resolved {code}. No further changes were made.", "approval_applied")
 
     async def run_forever(self, stop: asyncio.Event) -> None:
         await self.start()

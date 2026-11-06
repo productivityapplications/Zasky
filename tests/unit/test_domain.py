@@ -686,3 +686,29 @@ async def test_reconcile_cannot_cross_the_week(domain_env) -> None:
             )
         )
     assert exc.value.code == "INVALID_INPUT"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_approval_applies_once(domain_env) -> None:
+    _db, service, _settings = domain_env
+    result = await create_goal(service)
+    first, second = await asyncio.gather(
+        approve(service, result),
+        approve(service, result),
+        return_exceptions=True,
+    )
+    statuses = []
+    for item in (first, second):
+        if isinstance(item, DomainError):
+            statuses.append(item.code)
+        elif isinstance(item, Exception):
+            statuses.append(type(item).__name__)
+        else:
+            statuses.append(item.get("status") or item.get("already"))
+    assert "approved" in statuses
+    assert any(
+        (isinstance(item, dict) and item.get("already") == "approved")
+        for item in (first, second)
+    )
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    assert len(goals["goals"]) == 1

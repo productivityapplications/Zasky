@@ -17,6 +17,6 @@ data/
 *.db-shm
 data/*.lock
 
-# Demo media is delivered separately; keep large binaries out of normal commits.
-artifacts/demo/*.mp4
+# Demo build intermediates; the reviewed final MP4 is committed.
+artifacts/demo/build/
 artifacts/demo/*.wav

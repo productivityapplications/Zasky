@@ -1,5 +1,25 @@
 # Setup Guide
 
+## Hackathon local staging (current)
+
+This repository is currently verified on the local Linux host only. The Switch
+0.31.0 stack and the Zasky container are local; no VPS or public ingress is
+required for the demo. Use `/root/Zasky-secrets/zasky.env` (mode `0600`) for
+secrets and runtime configuration. Never copy it into Git.
+
+```bash
+cd /root/Zasky
+uv sync --extra dev
+uv run zasky-maintenance --env-file /root/Zasky-secrets/zasky.env migrate
+docker compose up -d --build
+curl -sS http://127.0.0.1:8099/health/ready
+```
+
+The staging model is OpenRouter's OpenAI-compatible Chat Completions endpoint
+with `openai/gpt-4o-mini`. The provider decision and pricing date are recorded in
+`AI_HANDOFF.md` and `docs/CONFIGURATION.md`.
+
+
 This guide applies after the coding agent has completed the intake and implementation. Do not put secrets in Git.
 
 ## Prerequisites

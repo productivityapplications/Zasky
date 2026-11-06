@@ -1,5 +1,18 @@
 # Deployment Guide
 
+## Hackathon staging status (2026-11-06)
+
+The hackathon build runs **locally only** on the Switch host. No VPS, public
+ingress, production database or release authority is granted. The Zasky
+container binds its health endpoint to `127.0.0.1:8099`; Switch remains bound to
+localhost (`8000` API, `3001` Gateway, `5433` Postgres). Cloud topology below is
+documented for a later authorized release, not demonstrated.
+
+The staging model is OpenRouter `openai/gpt-4o-mini` via Chat Completions. The
+operator accepted sending owner planning text with `store=false`; the local
+ledger enforces $20/month and 100 requests/day. The room must be private before
+any real owner data or public demo.
+
 ## Topology
 One Linux VPS with persistent storage runs the official Switch deployment and one Zasky service instance. Discord is connected by Switch's bridge. Zasky connects to Switch through the documented private or authenticated endpoint. Do not expose Zasky's health endpoints or SQLite file publicly.
 

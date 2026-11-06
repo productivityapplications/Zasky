@@ -74,6 +74,23 @@ class Settings(BaseSettings):
     switch_reconnect_min_seconds: float = Field(default=1.0, ge=0.05, le=60.0)
     switch_reconnect_max_seconds: float = Field(default=30.0, ge=0.1, le=300.0)
 
+    # LLM provider. The operator explicitly selected OpenRouter's
+    # OpenAI-compatible Chat Completions endpoint.
+    openai_api_key: SecretStr | None = None
+    openai_base_url: str = "https://openrouter.ai/api/v1"
+    openai_model: str = "openai/gpt-4o-mini"
+    openai_store: bool = False
+    openai_max_input_tokens: int = Field(default=24000, ge=1, le=200000)
+    openai_max_output_tokens: int = Field(default=2000, ge=1, le=32000)
+    max_llm_requests_per_day: int = Field(default=100, ge=1, le=10000)
+    max_llm_spend_usd_month: float = Field(default=20.0, gt=0, le=10000)
+    openai_input_usd_per_1m: float = Field(default=0.15, ge=0)
+    openai_output_usd_per_1m: float = Field(default=0.60, ge=0)
+    openai_price_effective_date: str = "2026-11-06"
+    llm_max_tool_cycles: int = Field(default=5, ge=1, le=5)
+    llm_max_proposals_per_message: int = Field(default=2, ge=1, le=2)
+    llm_request_timeout_seconds: float = Field(default=60.0, ge=5, le=120)
+
     # Planning profile. Defaults are safe staging values; the operator confirms
     # or overrides them during intake.
     timezone: str = "Africa/Lagos"
@@ -149,6 +166,28 @@ class Settings(BaseSettings):
         if not cleaned:
             raise ValueError("must not be empty")
         return cleaned
+
+    @field_validator("openai_base_url")
+    @classmethod
+    def _valid_llm_base_url(cls, value: str) -> str:
+        candidate = value.strip().rstrip("/")
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("must use http:// or https://")
+        if not parsed.netloc:
+            raise ValueError("must include a host")
+        if parsed.username or parsed.password:
+            raise ValueError("must not embed credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("must not include a query or fragment")
+        return candidate
+
+    @property
+    def llm_enabled(self) -> bool:
+        return bool(
+            self.openai_api_key
+            and self.openai_api_key.get_secret_value().strip()
+        )
 
     @field_validator("timezone")
     @classmethod
@@ -232,6 +271,8 @@ class Settings(BaseSettings):
             "capacity_pct": self.capacity_pct,
             "week_start_day": self.week_start_day,
             "max_message_chars": self.max_message_chars,
+            "llm_model": self.openai_model,
+            "llm_enabled": self.llm_enabled,
         }
 
 

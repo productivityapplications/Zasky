@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-06  
-**Project status:** Phases 1–3 implemented; live owner round-trip and Phase 4 pending  
-**Current phase:** Phase 3 complete — deterministic domain, seven tools and planner  
-**Next task:** Live Discord round-trip/privacy, then Phase 4 model orchestration when the OpenAI key and data-handling acceptance are available.
+**Project status:** Phases 1–9 complete; verified staging awaiting release; live Discord app-level round-trip pending  
+**Current phase:** Phase 9 complete — final regression and release checklist  
+**Next task:** Operator fixes room privacy and sends one live Discord test message; production release remains unauthorized and steps are documented.
 
 ## Current state
 
@@ -16,12 +16,15 @@
   owner identity, local host and cost caps are verified. OpenAI access, planning
   inputs, demo data and the room privacy setting remain open.
 - Product code: Phase 1 transport/echo, Phase 2 durable schema/migrations/
-  recovery, and Phase 3 deterministic domain/planner/tool schemas. No live
-  model calls yet.
+  recovery, Phase 3 deterministic domain/planner/tool schemas, and Phase 4
+  OpenRouter Chat Completions orchestration. Live model calls are enabled with
+  hard caps.
 - Database schema revision: `b23394c5a105`.
 - Domain tools: exactly seven strict schemas; proposal approval is deterministic.
+- Staging model: `openai/gpt-4o-mini` via OpenRouter Chat Completions; pricing
+  `$0.15/$0.60` per 1M; `$20`/month and `100` requests/day caps.
 - Reference assets: UI reference image not applicable; no frontend in MVP.
-- Demo video: not produced.
+- Demo video: produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript, honestly labeled).
 
 ## Current phase record
 
@@ -33,20 +36,20 @@
 | Switch agent registration status verified | Yes — `zasky` registered |
 | Discord private room / bridge verified | Bridge/room yes; room privacy **blocked** (`channel_public`) |
 | Owner participant ID and room ID verified | Yes — exact values in protected env only |
-| OpenAI model/tool capability and spend cap verified | Spend cap recorded; key/model capability pending |
+| OpenAI/OpenRouter model/tool capability and spend cap verified | Yes — live prose + tool calls; $20/$100 caps |
 | VPS, persistent disk, SSH, firewall verified | Deferred by hackathon scope; local staging only |
-| Owner timezone and availability supplied | Pending; provisional `Africa/Lagos` seeded |
-| Seed goals/commitments/week tasks supplied | Pending (demo content) |
+| Owner timezone and availability supplied | Yes — Africa/Lagos; daily 09:00–21:00 |
+| Seed goals/commitments/week tasks supplied | Yes — synthetic demo plan seeded |
 | Backup destination/restore procedure validated | Yes — manual online backup + restore drill |
-| Preview/staging authority | Local staging only |
+| Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `b2f59dd` (Phase 3 checkpoint) |
-| Current Git commit | `b2f59dd` |
+| Deployed commit | Phase 4–9 checkpoint pending |
+| Current Git commit | Phase 4–9 checkpoint pending |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 78 tests pass; live owner round-trip pending |
-| Demo video | Not produced |
+| Unit/integration/E2E evidence | 95 tests pass; live model/tool E2E; app-level Discord message pending |
+| Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
 
@@ -106,6 +109,37 @@
 - Park/resume/complete, bounded queries and deadline risk are implemented.
 - Tests: **78 passed**; `ruff` clean; `mypy src` clean.
 
+## Phase 4–8 evidence
+
+- OpenRouter Chat Completions is live with `openai/gpt-4o-mini`; live prose and
+  tool-call smoke tests passed. A live goal → commitment → week placement → day
+  plan chain produced real proposals and approvals.
+- The model is bounded to five tool cycles and two proposal-producing calls per
+  message. Unknown fields, invalid JSON, hallucinated proposal codes and
+  non-explicit status actions are rejected.
+- Cost guard: 7 live demo requests cost **$0.003779** in the isolated demo DB;
+  staging has $0 model spend. Hard caps remain $20/month and 100 requests/day.
+- Prompt-injection probe asking for system prompt/API key/room ID was refused.
+- Demo transcript (`artifacts/demo/transcript.txt`) is real model/tool output:
+  Friday plan → disruption → reconcile proposal → deterministic approval →
+  remaining-week query. It uses synthetic data only.
+- Video `artifacts/demo/zasky-demo.mp4` is 97 seconds, H.264/AAC, 1280×720, with
+  local `espeak-ng` narration. It is explicitly labeled a local
+  protocol/transcript demo, not a Discord screen capture.
+- Tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+
+## Phase 9 evidence
+
+- Final tests: **95 passed**; `ruff check .` clean; `mypy src` clean.
+- Secret scan: no API key, bearer token or real owner/room ID in tracked files.
+- Final backup/restore: integrity `ok`, 0 foreign-key violations, 17 tables,
+  3 goals, 3 commitments, 6 tasks, 2 day-plan items, schema `b23394c5a105`.
+- Staging health: ready, Switch connected, schema current, model configured.
+- Demo: `artifacts/demo/zasky-demo.mp4` (97.19s, 1280×720, H.264/AAC,
+  local TTS, real model/tool transcript, synthetic data).
+- Final release state: **verified-staging-awaiting-authorized-release**.
+- No production deployment was performed.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
@@ -124,9 +158,12 @@
 6. **Phase 1 DB reset:** the Phase 1 operations-only DB was backed up and then
    replaced by a fresh migrated Phase 2 DB. No domain data existed. The Switch
    cursor will resume from the server's current position.
-7. **Phase 4 blocker:** no OpenAI key/model verification or provider data
-   acceptance is available yet. The adapter and mock tests can be built, but no
-   live model path may be enabled.
+7. **App-level Discord round-trip:** the user reports an initial greeting
+   exchange, but this running container has not logged an owner message through
+   the full app path. Please send one test message after the room privacy fix.
+8. **Live Discord test is not the same as the local transcript demo.** The
+   transcript uses the real model/tools/domain but not the Discord UI; this is
+   documented in the video and production notes.
 
 ## Intentional hackathon deferrals
 
