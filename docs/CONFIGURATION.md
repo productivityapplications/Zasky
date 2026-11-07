@@ -6,7 +6,7 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 |---|---:|---|---|
 | `APP_ENV` | Yes | `development`, `test`, `staging`, `production` | Server-only |
 | `LOG_LEVEL` | No | Logging verbosity; default `INFO` | Server-only; never log secrets |
-| `DATABASE_URL` | Yes | SQLite DB path on persistent volume | Server-only; absolute persistent path in production |
+| `DATABASE_URL` | Yes | SQLite path or Neon/Postgres URL | Server-only. SQLite: `sqlite+aiosqlite:///absolute/path.db`. Postgres: `postgresql://...` or `postgresql+asyncpg://...`; `sslmode`/`channel_binding` are normalized for asyncpg |
 | `SWITCH_BASE_URL` | Yes | Switch API base URL | Server-only; HTTPS/WSS; configured host allow-list |
 | `SWITCH_AGENT_ID` | Yes | Registered agent identity | Server-only, not secret but private |
 | `SWITCH_AGENT_API_KEY` | Yes | Runtime agent bearer credential | Secret |
@@ -42,6 +42,10 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `WEEKLY_AVAILABILITY_JSON` | Yes | Owner-supplied weekday work windows | Validated JSON; local `HH:MM` windows; no guessed hours |
 | `HEALTH_BIND_HOST` | Yes | Health bind address | `127.0.0.1` default |
 | `HEALTH_BIND_PORT` | Yes | Private health port | Host firewall/private only |
+| `DASHBOARD_BIND_HOST` | No | Owner dashboard API bind address | Default `0.0.0.0` so Vercel can reach it |
+| `DASHBOARD_PORT` | No | Owner dashboard API port | Default `8100`; port 8000 is used by Switch |
+| `DASHBOARD_API_KEY` | Yes for dashboard | Bearer token required by every dashboard route | Secret; never `NEXT_PUBLIC_*`; rotate after demos |
+| `DASHBOARD_CORS_ORIGINS` | No | Comma-separated allowed origins, or `*` | Default `*` for the hackathon staging demo |
 | `BACKUP_DIR` | Yes | Persistent encrypted backup destination | Server-only; restricted permissions |
 | `MAX_MESSAGE_CHARS` | No | Inbound body size; default 8000 | Positive integer <= product cap |
 
@@ -50,6 +54,9 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 - Do not commit `.env`, provider keys, Discord tokens or SSH keys.
 - `SWITCH_REGISTRATION_KEY` is not the same as `SWITCH_AGENT_API_KEY`; delete the registration secret from runtime configuration after registration if no longer needed.
 - Discord bridge token remains in Switch's configuration, not Zasky.
+- `DASHBOARD_API_KEY` is a server-side bearer secret. In Vercel it belongs in
+  `ZASKY_DASHBOARD_TOKEN` with server-only visibility; never prefix either name
+  with `NEXT_PUBLIC_`.
 - Keep encryption keys for backups separate from the backup files.
 - Redact environment dumps, exception traces and CI output.
 

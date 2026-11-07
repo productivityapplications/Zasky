@@ -1,54 +1,57 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
-**Last updated:** 2026-11-06  
-**Project status:** Phases 1–9 complete; verified staging awaiting release; live Discord app-level round-trip observed  
-**Current phase:** Phase 9 complete — final regression and release checklist  
-**Next task:** Operator fixes room privacy and sends one live Discord test message; production release remains unauthorized and steps are documented.
+**Last updated:** 2026-11-07  
+**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres and a Vercel-ready dashboard; waiting on Vercel deployment and room privacy  
+**Current phase:** Post-Phase 9 cloud/dashboard upgrade — verified staging, awaiting authorized release  
+**Next task:** Deploy `frontend/` to Vercel using `frontend/README.md`, then confirm the Discord room is private.
 
 ## Current state
 
 - Product definition: fixed in `PROJECT_SPEC.md`.
-- MVP scope: fixed; single-owner, chat-native agent.
+- MVP scope: fixed; single-owner, chat-native agent with an explicit operator-approved dashboard scope change.
 - Architecture: fixed in `ARCHITECTURE.md`.
 - Implementation sequence: fixed in `IMPLEMENTATION_PLAN.md`.
 - Persistent agent instructions: `AGENTS.md`.
-- Operator intake: partially complete. Switch/Discord access, agent registration,
-  owner identity, local host and cost caps are verified. OpenAI access, planning
-  inputs, demo data and the room privacy setting remain open.
+- Operator intake: Switch/Discord access, agent registration, owner identity,
+  VPS host, Neon Postgres, OpenRouter and cost caps are verified. Room privacy
+  remains an operator action.
 - Product code: Phase 1 transport/echo, Phase 2 durable schema/migrations/
-  recovery, Phase 3 deterministic domain/planner/tool schemas, and Phase 4
-  OpenRouter Chat Completions orchestration. Live model calls are enabled with
-  hard caps.
-- Database schema revision: `6823aaca3872`.
+  recovery, Phase 3 deterministic domain/planner/tool schemas, Phase 4
+  OpenRouter Chat Completions orchestration, proactive features, Neon Postgres
+  migration and a Vercel-ready Next.js dashboard.
+- Database schema revision: `9f4c1a7b2d30`.
 - Domain tools: exactly seven strict schemas; proposal approval is deterministic.
 - Staging model: `openai/gpt-4o-mini` via OpenRouter Chat Completions; pricing
   `$0.15/$0.60` per 1M; `$20`/month and `100` requests/day caps.
-- Reference assets: UI reference image not applicable; no frontend in MVP.
+- Cloud state: Neon Postgres is authoritative; SQLite remains the local test path.
+- Dashboard: `frontend/` Next.js app with Today's Plan, All Tasks and
+  Reconciliation History; token-gated API on port `8100`; server-side proxy.
 - Demo video: produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript, honestly labeled).
 
 ## Current phase record
 
 | Field | Status |
 |---|---|
-| Operator intake | Partial — see `OPERATOR_INTAKE.md` |
-| Existing repository inspected | Yes — docs-only, clean `main` |
-| Switch deployment/version verified | Yes — local Switch **0.31.0** |
-| Switch agent registration status verified | Yes — `zasky` registered |
-| Discord private room / bridge verified | Bridge/room yes; room privacy **blocked** (`channel_public`) |
+| Operator intake | Complete for staging scope — see `OPERATOR_INTAKE.md` |
+| Existing repository inspected | Yes — application, tests, migrations and docs are present |
+| Switch deployment/version verified | Yes — VPS Switch **0.31.0** |
+| Switch agent registration status verified | Yes — `zasky` registered and connected |
+| Discord private room / bridge verified | Bridge/room yes; room privacy still **needs operator action** (`channel_public`) |
 | Owner participant ID and room ID verified | Yes — exact values in protected env only |
-| OpenAI/OpenRouter model/tool capability and spend cap verified | Yes — live prose + tool calls; $20/$100 caps |
-| VPS, persistent disk, SSH, firewall verified | Deferred by hackathon scope; local staging only |
+| OpenRouter model/tool capability and spend cap verified | Yes — live prose + tool calls; $20/$100 caps |
+| VPS, persistent disk, SSH verified | Yes — Docker Compose on the Switch VPS |
+| Neon Postgres verified | Yes — schema `9f4c1a7b2d30`, synthetic seed loaded |
 | Owner timezone and availability supplied | Yes — Africa/Lagos; daily 09:00–21:00 |
-| Seed goals/commitments/week tasks supplied | Yes — synthetic demo plan seeded |
-| Backup destination/restore procedure validated | Yes — manual online backup + restore drill |
-| Preview/staging authority | Local staging only; verified |
+| Seed goals/commitments/week tasks supplied | Yes — synthetic demo plan plus dashboard-today/reconcile seed |
+| Backup destination/restore procedure validated | Yes — manual SQLite online backup + restore drill; Neon is provider-managed |
+| Preview/staging authority | Verified VPS staging; Vercel deployment pending operator |
 | Production authority | Not granted |
-| Current preview URL | None — local container only |
-| Deployed commit | `5492550` (latency tuning) |
-| Current Git commit | `5492550` plus docs checkpoint |
-| UI reference asset | Not applicable |
-| `stageshow` skill | Not applicable; no frontend |
-| Unit/integration/E2E evidence | 113 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
+| Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
+| Deployed commit | Pending final commit of this checkpoint |
+| Current Git commit | Pending final commit of this checkpoint |
+| UI reference asset | Not applicable; dashboard has no supplied reference image |
+| `stageshow` skill | Not used |
+| Unit/integration/E2E evidence | 124 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -194,38 +197,59 @@
   second message; approval commands skip the placeholder.
 - Tests: **113 passed**; `ruff` clean; `mypy src` clean.
 
+## Postgres + dashboard upgrade (2026-11-07)
+
+- Added `asyncpg`, URL normalization for Neon (`sslmode`/`channel_binding`), and
+  SQLite/Postgres engine branching. Postgres schema is owned by Alembic; the app
+  does not run `create_all` on Postgres.
+- Migrated Neon through `b23394c5a105` → `6823aaca3872` →
+  `9f4c1a7b2d30`. The last migration widens Switch sequence columns to
+  `BIGINT` after Switch delivered `4294967315`, which exceeds signed 32-bit.
+- Disabled the asyncpg prepared-statement cache for Neon/PgBouncer compatibility.
+- Added an authenticated dashboard API on `0.0.0.0:8100`:
+  `today`, `tasks`, `tasks/{id}/complete`, `reconciliations`. Every route
+  requires the `DASHBOARD_API_KEY` bearer token.
+- Added `frontend/`, a Next.js 16 dark-mode dashboard with Today's Plan, All
+  Tasks (interactive completion) and Reconciliation History. The browser calls a
+  same-origin Next.js proxy; `ZASKY_DASHBOARD_TOKEN` stays server-side.
+- Added `scripts/seed_dashboard_demo.py` for an idempotent today plan and one
+  reconciliation history record. Synthetic data only.
+- Live verification: dashboard API returned `has_plan: true`, MUST/SHOULD items
+  and one reconciliation entry; a completion POST changed the task to
+  `completed` in Neon and updated counts. The Next.js production server proxy
+  returned the same payload on `localhost:3100`.
+- Tests: **124 passed**; `ruff check .` clean; `mypy src` clean; frontend
+  `npm run build` clean.
+- Port `8000` was requested for the dashboard but is occupied by Switch; the
+  dashboard API uses `8100`. The exact optional firewall command is
+  `sudo ufw allow 8100/tcp`.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
-   still enforces exact owner and room checks, but Discord channel visibility must
-   be restricted before Phase 1 acceptance and any demo. Apply
-   `@everyone → View Channel = deny` or replace the room with a private one.
-2. **OpenAI:** key, verified Responses model/tool capability and provider data
-   acceptance are still pending. Phases 1–3 do not need them.
-3. **Planning inputs:** timezone confirmation, availability, fixed events,
-   prep/commute/transition buffers and week-start confirmation are pending.
-   Synthetic demo inputs are acceptable if explicitly approved.
-4. **Demo:** synthetic seed content, pronunciation, output permission and a
-   Discord capture path are pending.
-5. **Live round-trip:** the transport is ready and the agent is in the room, but
-   no owner message has been observed by this running container.
-6. **Phase 1 DB reset:** the Phase 1 operations-only DB was backed up and then
-   replaced by a fresh migrated Phase 2 DB. No domain data existed. The Switch
-   cursor will resume from the server's current position.
-7. **Live Discord round-trip is now observed.** Owner messages at 18:12–18:14
-   on 2026-11-06 received app-level replies in the same room. The old running
-   image reproduced the reported memory/plan issues; the new image contains the
-   fixes and awaits a retest. Room privacy remains the outstanding issue.
-8. **Live Discord test is not the same as the local transcript demo.** The
+   enforces exact owner and room checks, but `@everyone → View Channel = deny`
+   must be applied before real personal use or a public demo.
+2. **Vercel deployment:** the frontend is built and verified locally but the
+   operator still needs to import `frontend/` in Vercel and set
+   `NEXT_PUBLIC_API_URL` and `ZASKY_DASHBOARD_TOKEN`.
+3. **Plain HTTP:** the dashboard API is reachable on port 8100 over HTTP for the
+   hackathon. The bearer token crosses the network; use HTTPS and rotate the
+   token for real personal data.
+4. **Live Discord test is not the same as the local transcript demo.** The
    transcript uses the real model/tools/domain but not the Discord UI; this is
    documented in the video and production notes.
+5. **Production deployment authority is not granted.** Final state is
+   `verified-staging-awaiting-authorized-release`.
+6. **Switch cursor reset:** the failed 32-bit insert left no connection-state
+   row; the client restarted from zero after the BIGINT migration. Event claims
+   still deduplicate replay.
 
 ## Intentional hackathon deferrals
 
 These are recorded before further code and must not be silently changed:
 
-1. **VPS deployment deferred.** Local staging only. Cloud architecture is
-   documented in the writeup, not demonstrated.
+1. **VPS + Neon staging demonstrated.** Production release and public ingress
+   approval remain separate; the Vercel deployment is the operator's final step.
 2. **Encrypted backup automation deferred.** Manual SQLite online backup and
    restore are enough for the demo; encrypted backup is documented as
    production-only.

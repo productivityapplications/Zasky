@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from zasky.config import Settings
+from zasky.config import Settings, normalize_database_url
 
 
 def test_resolved_ws_url_is_derived(settings: Settings) -> None:
@@ -87,3 +87,25 @@ def test_availability_accepts_valid_windows(settings: Settings) -> None:
     )
     parsed = Settings(**data)
     assert "monday" in parsed.weekly_availability_json
+
+
+def test_sqlite_url_is_not_rewritten() -> None:
+    assert (
+        normalize_database_url("sqlite+aiosqlite:///:memory:")
+        == "sqlite+aiosqlite:///:memory:"
+    )
+    assert (
+        normalize_database_url("sqlite+aiosqlite:////tmp/zasky.db")
+        == "sqlite+aiosqlite:////tmp/zasky.db"
+    )
+
+
+def test_neon_url_is_normalized_for_asyncpg() -> None:
+    normalized = normalize_database_url(
+        "postgresql://user:pass@example.neon.tech/neondb"
+        "?sslmode=require&channel_binding=require"
+    )
+    assert normalized.startswith("postgresql+asyncpg://")
+    assert "ssl=require" in normalized
+    assert "sslmode" not in normalized
+    assert "channel_binding" not in normalized

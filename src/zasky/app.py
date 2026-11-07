@@ -19,6 +19,7 @@ from zasky.domain.errors import DomainError
 from zasky.domain.service import DomainService
 from zasky.integrations.openrouter.client import OpenRouterClient
 from zasky.integrations.openrouter.usage import CostGuard
+from zasky.ops.dashboard_api import create_dashboard_app
 from zasky.ops.health import create_health_app
 from zasky.ops.lock import SingleWriterLock
 from zasky.ops.maintenance import head_revision
@@ -63,16 +64,26 @@ class ZaskyApp:
             typing_placeholder=settings.typing_placeholder_enabled,
         )
         self.health_app = create_health_app(self)
+        self.dashboard_app = create_dashboard_app(self)
 
-        database_path = make_url(settings.database_url).database
-        if database_path and database_path != ":memory:":
+        parsed_database = make_url(settings.database_url)
+        database_path = parsed_database.database
+        if (
+            parsed_database.drivername.startswith("sqlite")
+            and database_path
+            and database_path != ":memory:"
+        ):
             lock_path = Path(database_path).with_suffix(".lock")
         else:
+            # Postgres has no local database file. The container's /tmp is a
+            # writable tmpfs while the application root is read-only.
             lock_path = Path("/tmp/zasky.lock")
         self._lock = SingleWriterLock(lock_path)
 
         self._health_server: uvicorn.Server | None = None
         self._health_task: asyncio.Task[None] | None = None
+        self._dashboard_server: uvicorn.Server | None = None
+        self._dashboard_task: asyncio.Task[None] | None = None
         self._switch_task: asyncio.Task[None] | None = None
         self._alarm_task: asyncio.Task[None] | None = None
         self.schema_revision: str | None = None
@@ -114,6 +125,35 @@ class ZaskyApp:
         self._health_task = asyncio.create_task(
             self._health_server.serve(), name="zasky-health"
         )
+        if (
+            self.settings.dashboard_api_key is not None
+            and self.settings.dashboard_api_key.get_secret_value().strip()
+        ):
+            dashboard_config = uvicorn.Config(
+                self.dashboard_app,
+                host=self.settings.dashboard_bind_host,
+                port=self.settings.dashboard_port,
+                log_config=None,
+                access_log=False,
+                lifespan="off",
+            )
+            self._dashboard_server = uvicorn.Server(dashboard_config)
+            setattr(self._dashboard_server, signal_hook, lambda: None)
+            self._dashboard_task = asyncio.create_task(
+                self._dashboard_server.serve(), name="zasky-dashboard"
+            )
+            logger.info(
+                "Owner dashboard API started",
+                extra={"component": "dashboard"},
+            )
+        else:
+            logger.error(
+                "Owner dashboard API disabled: DASHBOARD_API_KEY is not set",
+                extra={
+                    "component": "dashboard",
+                    "error_code": "DASHBOARD_API_DISABLED",
+                },
+            )
         self._switch_task = asyncio.create_task(self.switch.run(), name="zasky-switch")
         self._alarm_task = asyncio.create_task(
             self.alarm_scheduler.run(), name="zasky-alarms"
@@ -125,7 +165,14 @@ class ZaskyApp:
         await self.alarm_scheduler.stop()
         if self._health_server is not None:
             self._health_server.should_exit = True
-        for task in (self._switch_task, self._health_task, self._alarm_task):
+        if self._dashboard_server is not None:
+            self._dashboard_server.should_exit = True
+        for task in (
+            self._switch_task,
+            self._health_task,
+            self._dashboard_task,
+            self._alarm_task,
+        ):
             if task is None:
                 continue
             if not task.done():
@@ -134,6 +181,7 @@ class ZaskyApp:
                 await task
         self._switch_task = None
         self._health_task = None
+        self._dashboard_task = None
         if self.llm is not None:
             await self.llm.close()
         await self.db.close()

@@ -8,6 +8,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from zasky.config import normalize_database_url
 from zasky.storage.models import Base
 
 config = context.config
@@ -17,11 +18,18 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/zasky.db")
+database_url = normalize_database_url(
+    os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/zasky.db")
+)
 config.set_main_option("sqlalchemy.url", database_url)
 
 
 def configure_context(connection=None) -> None:
+    is_sqlite = (
+        connection.dialect.name == "sqlite"
+        if connection is not None
+        else database_url.startswith("sqlite")
+    )
     context.configure(
         connection=connection,
         url=None if connection is not None else database_url,
@@ -30,7 +38,7 @@ def configure_context(connection=None) -> None:
         dialect_opts={"paramstyle": "named"} if connection is None else None,
         compare_type=True,
         compare_server_default=True,
-        render_as_batch=True,
+        render_as_batch=is_sqlite,
         include_schemas=False,
     )
 

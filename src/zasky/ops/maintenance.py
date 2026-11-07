@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -14,7 +14,6 @@ from alembic.script import ScriptDirectory
 
 from zasky.ops.backup import (
     backup_database,
-    database_path,
     prune_backups,
     restore_database,
 )
@@ -62,17 +61,16 @@ def head_revision() -> str | None:
 
 
 def current_revision(database_url: str) -> str | None:
-    path = database_path(database_url)
-    if not path.is_file():
-        return None
-    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    try:
-        row = connection.execute("SELECT version_num FROM alembic_version").fetchone()
-        return str(row[0]) if row else None
-    except sqlite3.OperationalError:
-        return None
-    finally:
-        connection.close()
+    from zasky.storage.database import Database
+
+    async def read() -> str | None:
+        db = Database(database_url)
+        try:
+            return await db.get_schema_revision()
+        finally:
+            await db.close(close_connections=False)
+
+    return asyncio.run(read())
 
 
 def _cmd_migrate(args: argparse.Namespace) -> int:

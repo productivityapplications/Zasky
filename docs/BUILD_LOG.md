@@ -1,5 +1,33 @@
 # Zasky Build Log
 
+## 2026-11-07 — Neon Postgres and Vercel-ready owner dashboard
+
+- Added `asyncpg` and normalized Neon URLs (`postgres://`/`postgresql://` →
+  `postgresql+asyncpg://`, `sslmode` → asyncpg `ssl`, drop `channel_binding`).
+- Added SQLite/Postgres engine branching, `pool_pre_ping` on Postgres and a
+  process-lifetime statement-cache-off connection pool for Neon/PgBouncer.
+- Updated Alembic environment and the baseline migration for Postgres partial
+  indexes and append-only audit triggers.
+- Migrated Neon to `b23394c5a105` → `6823aaca3872` → `9f4c1a7b2d30`. The last
+  migration widens Switch sequence columns to `BIGINT` after a real sequence
+  value exceeded signed 32-bit range.
+- Seeded synthetic base data plus a dashboard-specific today plan and one
+  reconciliation history entry.
+- Added an authenticated owner dashboard API on `0.0.0.0:8100` with CORS,
+  bearer auth and four routes: today, tasks, completion and reconciliation
+  history.
+- Added `frontend/`: Next.js 16 dark dashboard with Today's Plan (MUST/SHOULD),
+  All Tasks with interactive completion checkboxes and a reconciliation timeline.
+  The browser uses a same-origin Next proxy; the token stays server-side.
+- Added `frontend/README.md` with exact Vercel steps, environment variables and
+  the optional `sudo ufw allow 8100/tcp` command. Port `8000` remains Switch.
+- Live evidence: dashboard API read returned the approved plan, task pool and one
+  recovery record; a completion POST updated Neon and the task counts. The
+  Next.js production server proxy returned the same payload.
+- Tests: **124 passed**; `ruff check .` clean; `mypy src` clean; `npm run build`
+  clean. Container health: database/switch/schema/model all ready.
+- Release state remains **verified-staging-awaiting-authorized-release**.
+
 ## 2026-11-05 — Blueprint package authored
 
 - Read the Zasky project handoff and `PROPER_VIBE_CODING_WORKFLOW_AUTONOMOUS.md`.

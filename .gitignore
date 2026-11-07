@@ -7,6 +7,14 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Frontend build output
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
 # Local secrets and runtime state
 .env
 .env.*

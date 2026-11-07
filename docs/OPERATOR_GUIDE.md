@@ -39,7 +39,22 @@ When parking, provide a resume note: where you stopped and the next concrete act
 
 Morning/evening reminders can be disabled. If enabled, they are sent at configured local times and at most once per type/day. A long outage may cause a reminder to be skipped rather than sent late.
 
-## Staging configuration (2026-11-06)
+## Owner dashboard (2026-11-07)
+
+Open the Vercel dashboard URL to see:
+
+- **Today's Plan** — the approved MUST/SHOULD items, fixed events, battery and
+  latest wake.
+- **All Tasks** — the task pool with interactive checkboxes to mark a task
+  complete.
+- **Reconciliation History** — approved recovery plans with kept/moved items.
+
+The dashboard writes to the same Neon Postgres database as chat. A checkbox is an
+explicit owner completion, not a model action. The dashboard token stays on the
+Vercel server. Do not share the Vercel URL publicly or put the token in a browser
+variable.
+
+## Staging configuration (2026-11-07)
 
 - Timezone: Africa/Lagos.
 - Week start: Monday.

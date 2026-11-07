@@ -123,7 +123,22 @@ class SwitchClient:
 
     async def run(self) -> None:
         """Connect and reconnect until stopped or terminally evicted."""
-        state = await self._db.get_connection_state(self._settings.switch_agent_id)
+        try:
+            state = await self._db.get_connection_state(
+                self._settings.switch_agent_id
+            )
+        except Exception as exc:
+            # A transient database/pooler error at startup must not kill the
+            # Switch supervisor task silently. The event claim ledger still
+            # deduplicates any replay if the stored cursor cannot be read.
+            logger.exception(
+                "Could not load Switch cursor state; starting from zero",
+                extra={
+                    "component": "switch",
+                    "error_code": type(exc).__name__,
+                },
+            )
+            state = None
         if state is not None:
             self._highest_processed = state.highest_processed_sequence
             self._generation = state.generation

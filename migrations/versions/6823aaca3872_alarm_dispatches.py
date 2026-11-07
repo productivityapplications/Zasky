@@ -1,3 +1,4 @@
+# ruff: noqa
 """alarm dispatches
 
 Revision ID: 6823aaca3872

@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -469,7 +470,9 @@ class SwitchConnectionState(Base):
     agent_id: Mapped[str] = mapped_column(String(80), primary_key=True)
     connection_id: Mapped[str] = mapped_column(String(80), nullable=False)
     generation: Mapped[str | None] = mapped_column(String(80))
-    highest_processed_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    highest_processed_sequence: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0
+    )
     protocol_revision: Mapped[str | None] = mapped_column(String(80))
     last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -486,7 +489,7 @@ class ProcessedSwitchEvent(Base):
     )
 
     agent_id: Mapped[str] = mapped_column(String(80), primary_key=True)
-    event_sequence: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     connection_id: Mapped[str] = mapped_column(String(80), nullable=False)
     room_id: Mapped[str] = mapped_column(String(120), nullable=False)
     sender_id: Mapped[str | None] = mapped_column(String(240))

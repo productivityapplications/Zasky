@@ -1,16 +1,18 @@
 # Setup Guide
 
-## Hackathon local staging (current)
+## Hackathon VPS staging (current)
 
-This repository is currently verified on the local Linux host only. The Switch
-0.31.0 stack and the Zasky container are local; no VPS or public ingress is
-required for the demo. Use `/root/Zasky-secrets/zasky.env` (mode `0600`) for
-secrets and runtime configuration. Never copy it into Git.
+This repository is verified on the Switch VPS against Switch **0.31.0**, Neon
+Postgres and a Vercel-ready Next.js dashboard. Use
+`/root/Zasky-secrets/zasky.env` (mode `0600`) for secrets and runtime
+configuration. Never copy it into Git.
 
 ```bash
 cd /root/Zasky
 uv sync --extra dev
 uv run zasky-maintenance --env-file /root/Zasky-secrets/zasky.env migrate
+uv run python scripts/seed_demo.py --env-file /root/Zasky-secrets/zasky.env
+uv run python scripts/seed_dashboard_demo.py --env-file /root/Zasky-secrets/zasky.env
 docker compose up -d --build
 curl -sS http://127.0.0.1:8099/health/ready
 ```
@@ -19,6 +21,17 @@ The staging model is OpenRouter's OpenAI-compatible Chat Completions endpoint
 with `openai/gpt-4o-mini`. The provider decision and pricing date are recorded in
 `AI_HANDOFF.md` and `docs/CONFIGURATION.md`.
 
+Dashboard API verification (token comes from the protected env file):
+
+```bash
+DASHBOARD_API_KEY="$(grep -m1 '^DASHBOARD_API_KEY=' /root/Zasky-secrets/zasky.env | cut -d= -f2-)"
+curl -fsS -H "Authorization: Bearer ${DASHBOARD_API_KEY}" \
+  http://127.0.0.1:8100/api/dashboard/today | head -c 300
+```
+
+The frontend lives in `frontend/` and deploys to Vercel. See
+`frontend/README.md` for environment variables, root-directory settings and the
+firewall command. Port `8100` is the dashboard API; port `8000` is Switch.
 
 This guide applies after the coding agent has completed the intake and implementation. Do not put secrets in Git.
 
@@ -27,7 +40,9 @@ This guide applies after the coding agent has completed the intake and implement
 - Docker Engine and Docker Compose plugin.
 - Running Switch workspace and the current documented agent WebSocket protocol.
 - Discord private server/channel connected through Switch.
-- OpenAI API key and a verified Responses API model with function/tool calling.
+- OpenRouter API key and a verified Chat Completions model with tool calling
+  (`openai/gpt-4o-mini` in staging).
+- Neon Postgres URL for cloud state (SQLite remains supported for local tests).
 - Operator-approved monthly infrastructure and model spend ceilings.
 
 ## First deployment

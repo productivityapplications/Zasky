@@ -10,7 +10,6 @@ services:
     env_file:
       - ${ZASKY_ENV_FILE:-/root/Zasky-secrets/zasky.env}
     environment:
-      DATABASE_URL: sqlite+aiosqlite:////app/data/zasky.db
       HEALTH_BIND_HOST: 127.0.0.1
       HEALTH_BIND_PORT: 8099
     volumes:

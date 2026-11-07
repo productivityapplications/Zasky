@@ -4,48 +4,57 @@ This package is the pre-implementation source of truth for building Zasky with a
 
 > **Zasky doesn't give me discipline. It makes coming back cheap.**
 
-## Implementation status — 2026-11-06
+## Implementation status — 2026-11-07
 
-Phases 1–9 are implemented and verified in **local staging** against Switch
-**0.31.0**. The agent is registered as `zasky`, connected to the configured room,
-and the private health endpoint reports ready. Phase 1 proves the Switch
-transport, owner/room gate, event dedupe, reconnect handling and deterministic
-echo. Phase 2 adds the complete durable schema, Alembic migration, owner
-singleton, append-only audit triggers, schema checks and a restore-tested manual
-SQLite backup. Phase 3 adds the deterministic planning domain, seven strict
-tools, proposal/approval lifecycle, capacity arithmetic, day planning, backplan
-and reconcile. Phase 4 connects the bounded tool loop to the operator-selected
-OpenRouter Chat Completions endpoint (`openai/gpt-4o-mini`) with hard request
-and spend caps.
+Phases 1–9 are implemented and verified in **VPS staging** against Switch
+**0.31.0**, Neon Postgres and a Vercel-ready Next.js dashboard. The agent is
+registered as `zasky`, connected to the configured room, and the private health
+endpoint reports ready.
 
-Proactive room features: task-start alarms, thread-aware focus mode, and a
-deterministic Daily Briefing on plan approval. Switch 0.31.0 does not expose
-thread creation, pinning, or scheduled events; these limitations are documented
-and no direct Discord API is used.
-
-The runtime intentionally uses **OpenRouter's OpenAI-compatible Chat
-Completions** format rather than the OpenAI Responses API. This was an explicit
-operator decision recorded in `AI_HANDOFF.md` and `docs/BUILD_LOG.md`; the
-seven-tool surface, deterministic approval parser and domain authority are
-unchanged.
+- **Chat** is the primary interface: seven deterministic tools, exact owner
+  approval, proactive task-start alarms, focus mode and Daily Briefing.
+- **State** lives in Neon Postgres (`DATABASE_URL`); SQLite remains supported
+  for local tests. Alembic owns the cloud schema.
+- **Dashboard** is in `frontend/` with Today's Plan, All Tasks and Reconciliation
+  History. Checkbox completion writes through the same deterministic domain
+  service.
+- **Dashboard API** is token-gated on port `8100`; port `8000` is used by Switch.
+- **Model** is OpenRouter `openai/gpt-4o-mini` via Chat Completions with
+  `provider.sort=throughput`, a 600-token cap and hard $20/month,
+  100 requests/day limits.
 
 ```bash
-# Run directly from the repository (development)
-ZASKY_ENV_FILE=/root/Zasky-secrets/zasky.env uv run zasky
+# Migrate the configured database (Neon in staging)
+uv run zasky-maintenance --env-file /root/Zasky-secrets/zasky.env migrate
 
-# Or run the containerized local staging service
-docker compose up -d
-docker compose ps
+# Seed synthetic demo data
+uv run python scripts/seed_demo.py --env-file /root/Zasky-secrets/zasky.env
+uv run python scripts/seed_dashboard_demo.py --env-file /root/Zasky-secrets/zasky.env
+
+# Run the verified staging container
+docker compose up -d --build
 curl -sS http://127.0.0.1:8099/health/ready
 # {"status":"ready","database":"ok","switch":"connected","schema":"current","model":"configured"}
 ```
 
-Once the Discord bridge/room is private, test with a message addressed to the
-agent, for example:
+Test chat with a message addressed to the agent:
 
 ```text
-@zasky What is my plan for Friday?
+@zasky What is my plan for today? Battery medium.
 ```
+
+Test the dashboard locally:
+
+```bash
+cd frontend
+npm install
+NEXT_PUBLIC_API_URL=http://YOUR_VPS_IP:8100 \
+ZASKY_DASHBOARD_TOKEN=<DASHBOARD_API_KEY> \
+npm run dev
+```
+
+Then deploy `frontend/` to Vercel using `frontend/README.md`. The token stays
+server-side in `ZASKY_DASHBOARD_TOKEN`; never expose it as `NEXT_PUBLIC_*`.
 
 The local protocol/transcript demo is in `artifacts/demo/`:
 
@@ -53,16 +62,10 @@ The local protocol/transcript demo is in `artifacts/demo/`:
   transcript, synthetic data, explicitly labeled **not a Discord screen capture**.
 - `narration-script.md`, `production-notes.md`, `demo-seed.md`, `transcript.txt`.
 
-It is honest about the headless-host limitation: Switch is connected separately,
-but the demo video renders the real model/tool/approval transcript.
-
 Secrets live outside the repository in `/root/Zasky-secrets/zasky.env` with mode
 `0600`. `.env.example` documents the required names; no real values belong in Git.
-
-Phase 0 is **partially complete**: Switch/Discord access and the owner identity are
-verified, but OpenAI access, planning inputs, demo data and the room's privacy
-setting still need operator confirmation before later phases or Phase 1
-acceptance. See `OPERATOR_INTAKE.md` and `AI_HANDOFF.md`.
+The Discord room privacy setting (`@everyone → View Channel = deny`) remains an
+operator action before real personal use.
 
 ## What this package defines
 
@@ -101,6 +104,8 @@ zasky/
 ├── DEMO_VIDEO_PLAN.md
 ├── README.md
 ├── FINAL_PRE_IMPLEMENTATION_AUDIT.md
+├── frontend/                  # Next.js owner dashboard (Vercel)
+├── scripts/                   # synthetic demo seed + demo build helpers
 └── docs/
     ├── SETUP.md
     ├── CONFIGURATION.md
@@ -126,11 +131,11 @@ The provided general workflow is applied, but it is not followed blindly:
 |---|---|
 | One consolidated operator intake | Retained |
 | Autonomous implementation checkpoints | Retained |
-| Early skeletal frontend deployment | Adapted to an early Switch-connected Discord round trip and protected test deployment |
-| Complete functionality before final visual work | Retained as core E2E gate before chat UX refinement |
-| Supplied UI reference images | Not applicable; no browser/mobile frontend exists in MVP |
-| `stageshow` frontend skill | Not applicable; no frontend work exists |
-| Website, landing page, footer, metadata/icons | Out of scope |
+| Early skeletal frontend deployment | Replaced by the Switch-connected Discord round trip and protected staging deployment |
+| Complete functionality before final visual work | Retained; the dashboard was added only after the domain and chat loop passed |
+| Supplied UI reference images | Not applicable; the operator requested a clean dark dashboard without a reference image |
+| `stageshow` frontend skill | Not used; the dashboard is a small purpose-built Next.js app |
+| Website, landing page, footer, metadata/icons | Out of scope; `frontend/` is a private owner dashboard only |
 | README and relevant docs | Retained |
 | <=3-minute real product demo video | Retained |
 | Security and explicit production authorization | Retained |
@@ -153,6 +158,15 @@ Do not ask the operator for mockups or pretend a reference image exists. If a fr
 
 ## Current status
 
-This is a blueprint package, not an implementation. Product code has not been written, no repository has been changed, no Switch/Discord/OpenAI credentials have been tested and no deployment has occurred.
+The implementation is complete for the hackathon staging scope: chat, deterministic
+planning, proactive features, Neon Postgres, the dashboard API and the Vercel-ready
+frontend. Tests, migration status, health and live API evidence are recorded in
+`AI_HANDOFF.md`, `docs/BUILD_LOG.md` and `docs/TESTING.md`.
 
-The first implementation-agent task is to inspect the actual repository and complete the consolidated operator intake. See the bottom of `AI_HANDOFF.md` and `IMPLEMENTATION_PLAN.md`.
+Remaining operator actions:
+
+1. Set the Discord room to private (`@everyone → View Channel = deny`).
+2. Deploy `frontend/` to Vercel with `NEXT_PUBLIC_API_URL` and
+   `ZASKY_DASHBOARD_TOKEN`.
+3. For real use, put the dashboard API behind HTTPS and rotate the token.
+4. Production release still requires explicit operator authorization.

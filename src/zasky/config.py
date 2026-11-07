@@ -12,7 +12,7 @@ import os
 from datetime import time
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunparse, urlunsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator
@@ -27,6 +27,29 @@ _WEEKDAYS = {
     "saturday",
     "sunday",
 }
+
+
+def normalize_database_url(value: str) -> str:
+    """Normalize Neon/Postgres URLs for the async asyncpg driver."""
+    url = value.strip()
+    if not (url.startswith("postgres://") or url.startswith("postgresql://")):
+        return url
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
+    if url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+    # asyncpg uses `ssl=require`, and does not accept libpq's channel_binding.
+    parsed = urlsplit(url)
+    query = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        if key == "channel_binding":
+            continue
+        if key == "sslmode":
+            key = "ssl"
+        query.append((key, value))
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+    )
 
 
 def _parse_hhmm(value: str) -> time:
@@ -92,6 +115,13 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=60.0, ge=5, le=120)
     typing_placeholder_enabled: bool = True
 
+    # Owner dashboard API (Vercel). The token is mandatory; the public API is
+    # never unauthenticated even though CORS is permissive for the demo.
+    dashboard_bind_host: str = "0.0.0.0"
+    dashboard_port: int = Field(default=8100, ge=1, le=65535)
+    dashboard_api_key: SecretStr | None = None
+    dashboard_cors_origins: str = "*"
+
     # Planning profile. Defaults are safe staging values; the operator confirms
     # or overrides them during intake.
     timezone: str = "Africa/Lagos"
@@ -118,10 +148,16 @@ class Settings(BaseSettings):
 
     @field_validator("database_url")
     @classmethod
-    def _sqlite_only(cls, value: str) -> str:
-        if not value.startswith("sqlite+aiosqlite:///"):
-            raise ValueError("must start with sqlite+aiosqlite:///")
-        return value
+    def _valid_database_url(cls, value: str) -> str:
+        normalized = normalize_database_url(value)
+        if not (
+            normalized.startswith("sqlite+aiosqlite:///")
+            or normalized.startswith("postgresql+asyncpg://")
+        ):
+            raise ValueError(
+                "must use sqlite+aiosqlite:/// or postgresql+asyncpg://"
+            )
+        return normalized
 
     @field_validator("switch_base_url")
     @classmethod

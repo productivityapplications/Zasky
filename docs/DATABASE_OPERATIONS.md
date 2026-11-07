@@ -2,6 +2,13 @@
 
 All writes are owner-scoped and performed through domain services. The LLM never writes SQL. Each multi-row operation is atomic and appends an audit event in the same transaction unless noted.
 
+Cloud staging uses Neon Postgres through asyncpg; local tests use SQLite. The
+application checks `alembic_version` at startup and does not create Postgres
+tables implicitly. Dashboard task completion calls the same `complete_task`
+transaction and audit path as chat, with the dashboard bearer token as the
+owner authorization boundary. The Switch cursor and event-sequence columns are
+`BIGINT` because Switch sequences can exceed signed 32-bit range.
+
 | Owner action | Read/validate | Database operations | Transaction/idempotency behavior |
 |---|---|---|---|
 | Create year goal | Owner + room; year/title/evidence; max-five rule; duplicate normalized title | `INSERT year_goals`; `INSERT audit_events` | One transaction; rollback if max-five/unique constraint fails |

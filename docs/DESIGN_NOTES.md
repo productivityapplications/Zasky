@@ -136,5 +136,23 @@ Implemented behavior:
   Discord scheduled events are unavailable through Switch 0.31.0; pin the
   message manually in Discord if desired. No direct Discord API is used.
 
-## Intentional exclusions
-No website shell, dashboard, mockup, UI reference imagery, footer, web metadata, app icon or `stageshow` skill installation. Reconsider only after an explicit product scope change.
+## Scope change: owner dashboard (2026-11-07)
+
+The original chat-only MVP excluded a dashboard. The operator explicitly
+requested a hackathon dashboard and a cloud Postgres migration, so this is a
+documented scope change, not silent drift:
+
+- `frontend/` is a private, dark-mode Next.js owner dashboard.
+- It reads `today`, `tasks` and `reconciliations` through a token-gated FastAPI
+  surface on port `8100`.
+- Task completion is an explicit owner checkbox action and calls the same
+  deterministic `DomainService.complete_task` used by chat.
+- The dashboard is not a public planning API and does not let the model or the
+  browser invent, rename, park or reschedule tasks.
+- Neon Postgres is the cloud source of truth; SQLite remains supported for local
+  tests.
+- The dashboard token is held server-side by the Vercel proxy and is never
+  shipped to the browser.
+
+Still excluded: public sign-up, multi-user tenancy, payments, marketing pages,
+public analytics and any direct Discord/third-party calendar API.

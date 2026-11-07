@@ -89,3 +89,18 @@ async def test_advance_cursor_never_moves_backwards(tmp_path) -> None:
     finally:
         await db.close()
         await asyncio.sleep(0.2)
+
+
+def test_switch_sequence_columns_are_bigint() -> None:
+    from sqlalchemy import BigInteger
+
+    from zasky.storage.models import ProcessedSwitchEvent, SwitchConnectionState
+
+    assert isinstance(
+        SwitchConnectionState.__table__.c.highest_processed_sequence.type,
+        BigInteger,
+    )
+    assert isinstance(
+        ProcessedSwitchEvent.__table__.c.event_sequence.type,
+        BigInteger,
+    )

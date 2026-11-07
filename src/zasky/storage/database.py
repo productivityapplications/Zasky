@@ -16,11 +16,11 @@ from typing import Any
 
 from sqlalchemy import event, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from zasky.config import Settings
+from zasky.config import Settings, normalize_database_url
 from zasky.storage.models import Base, ProcessedSwitchEvent, SwitchConnectionState
 
 
@@ -55,16 +55,31 @@ class Database:
     """Async SQLite database with WAL, foreign keys and a bounded busy timeout."""
 
     def __init__(self, url: str) -> None:
+        url = normalize_database_url(url)
         self.url = url
         parsed = make_url(url)
-        self._is_memory = parsed.database in (None, "", ":memory:")
+        self._is_sqlite = parsed.drivername.startswith("sqlite")
+        self._is_postgres = parsed.drivername.startswith("postgresql")
+        self._is_memory = self._is_sqlite and parsed.database in (
+            None,
+            "",
+            ":memory:",
+        )
         self._engine = create_async_engine(
             url,
             echo=False,
             future=True,
+            pool_pre_ping=self._is_postgres,
             poolclass=StaticPool if self._is_memory else None,
+            # Neon uses a PgBouncer-style pooler. Server-side prepared
+            # statements can survive a migration and then fail with
+            # "cached statement plan is invalid"; disabling the asyncpg
+            # statement cache keeps the pooler compatible.
+            connect_args=(
+                {"prepared_statement_cache_size": 0} if self._is_postgres else {}
+            ),
         )
-        if not self._is_memory:
+        if self._is_sqlite and not self._is_memory:
             event.listen(self._engine.sync_engine, "connect", self._set_sqlite_pragmas)
         self._session_factory = async_sessionmaker(
             self._engine, expire_on_commit=False, class_=AsyncSession
@@ -87,13 +102,16 @@ class Database:
 
     @_serialized
     async def init(self) -> None:
-        if not self._is_memory:
+        if self._is_sqlite and not self._is_memory:
             parsed = make_url(self.url)
             database_path = parsed.database
             if database_path:
                 Path(database_path).parent.mkdir(parents=True, exist_ok=True)
-        async with self._engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+        if self._is_sqlite:
+            async with self._engine.begin() as connection:
+                await connection.run_sync(Base.metadata.create_all)
+        # Postgres schema is owned by Alembic; the app checks alembic_version
+        # during startup and refuses readiness if migrations are incomplete.
 
     @_serialized
     async def close(self, *, close_connections: bool = True) -> None:
@@ -116,7 +134,7 @@ class Database:
                     text("SELECT version_num FROM alembic_version")
                 )
                 return result.scalar_one_or_none()
-        except OperationalError:
+        except (OperationalError, ProgrammingError):
             return None
 
     @asynccontextmanager

@@ -169,7 +169,7 @@ Indexes `(status,expires_at)`, `(scope_key,status)`. Payload must not contain se
 | Field | Type | Required | Rules |
 |---|---|---:|---|
 | `agent_id` | TEXT | Yes | Registered Switch agent ID |
-| `event_sequence` | INTEGER | Yes | Numeric sequence from WebSocket event envelope; composite PK with agent ID |
+| `event_sequence` | BIGINT | Yes | Numeric sequence from WebSocket event envelope; composite PK with agent ID |
 | `connection_id` | TEXT | Yes | Stable Switch connection ID |
 | `room_id` | TEXT | Yes | Exact room ID |
 | `sender_id` | TEXT | No | opaque participant ID |
@@ -239,7 +239,7 @@ One row per registered Zasky agent.
 - `agent_id` TEXT PK
 - `connection_id` TEXT UNIQUE (stable UUID reused on reconnect)
 - `generation` TEXT/INTEGER using the exact type returned by Switch
-- `highest_processed_sequence` INTEGER >= 0
+- `highest_processed_sequence` BIGINT >= 0 (Switch sequences can exceed signed 32-bit)
 - `protocol_revision` TEXT/INTEGER as returned
 - `last_connected_at` DATETIME UTC
 - `updated_at` DATETIME UTC

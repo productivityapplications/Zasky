@@ -1,6 +1,8 @@
 # Zasky — API and Domain Tool Specification
 
-There is no public product REST API in the MVP. The agent's public interface is the Switch room. Internal domain functions are exposed to the model as exactly seven strict tools. Only the application may call these functions after inbound owner authorization.
+The primary product interface is the Switch room. Internal domain functions are exposed to the model as exactly seven strict tools. Only the application may call these functions after inbound owner authorization.
+
+There is also a **token-gated owner dashboard API** on port `8100` for the Vercel dashboard. It is not a public planning API: every route requires the `DASHBOARD_API_KEY` bearer token, and task completion is an explicit owner action. The dashboard API never exposes Switch credentials, model keys or room history.
 
 **Staging provider note (2026-11-06):** the model adapter uses OpenRouter's
 OpenAI-compatible Chat Completions endpoint with `openai/gpt-4o-mini`, chosen
@@ -180,6 +182,63 @@ Parser checks Switch `payload.addressed=true`, owner, room, code, TTL, status an
 - `GET /health/live` — process responds.
 - `GET /health/ready` — DB/migrations/config/Switch connectivity status. Do not include secret values, owner ID, room ID or private schedule in response.
 - Both bind localhost/private network and are not exposed publicly.
+
+## Owner dashboard API (port 8100)
+
+Bind: `DASHBOARD_BIND_HOST` (default `0.0.0.0`) and `DASHBOARD_PORT`
+(default `8100`). The private health server remains on `127.0.0.1:8099`.
+Switch already occupies port `8000` on this host.
+
+Authentication:
+
+```http
+Authorization: Bearer <DASHBOARD_API_KEY>
+```
+
+- Missing/wrong token: `401` with `WWW-Authenticate: Bearer`.
+- `DASHBOARD_API_KEY` not configured: `503`.
+- CORS allows `DASHBOARD_CORS_ORIGINS` (default `*`) with `Authorization` and
+  `Content-Type` headers. The Vercel app normally uses its server-side proxy, so
+  the browser does not call this API directly.
+- No request or response logs raw task text, tokens or room history.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/dashboard/today?date=YYYY-MM-DD` | Approved plan for a local date (default today): MUST, SHOULD, fixed events, battery and latest wake |
+| `GET` | `/api/dashboard/tasks?status=active&limit=200` | Task pool with status counts, estimates, dates and commitment titles |
+| `POST` | `/api/dashboard/tasks/{task_id}/complete` | Explicit owner completion; optional `{"actual_min": 40}` |
+| `GET` | `/api/dashboard/reconciliations?limit=20` | Approved recovery plans with item dispositions and summaries |
+
+Example response shape for `/api/dashboard/today`:
+
+```json
+{
+  "date": "2026-11-07",
+  "timezone": "Africa/Lagos",
+  "has_plan": true,
+  "battery": "high",
+  "source": "reconcile",
+  "latest_wake_display": "8:30 AM",
+  "must": [
+    {
+      "id": "task-uuid",
+      "title": "Check backup restore evidence",
+      "status": "active",
+      "disposition": "must",
+      "planned_start_display": "9:00 AM",
+      "planned_end_display": "9:30 AM",
+      "planned_est_min": 30
+    }
+  ],
+  "should": [],
+  "fixed_events": []
+}
+```
+
+Completion goes through `DomainService.complete_task`, so it updates
+`week_tasks`, matching `day_plan_items.outcome`, the scope revisions and the
+append-only audit event in one transaction. The dashboard cannot create,
+rename, park or reschedule tasks.
 
 ## Rate and abuse controls
 

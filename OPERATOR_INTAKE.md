@@ -5,8 +5,8 @@
 Status values: `PENDING`, `PASS`, `BLOCKED`, `NOT_APPLICABLE`.  
 Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a documented default.
 
-**Intake record date:** 2026-11-06  
-**Scope decision:** local staging only; VPS deployment, encrypted backup automation, full micro-USD reservation ledger and production release are intentionally deferred. See `AI_HANDOFF.md`.
+**Intake record date:** 2026-11-07  
+**Scope decision:** VPS staging with Neon Postgres and a Vercel-ready owner dashboard. Production release authority, public multi-user access, encrypted backup automation and a full micro-USD reservation ledger remain out of scope. See `AI_HANDOFF.md`.
 
 | ID | Input / decision | Required? | Current source / default | Operator answer | Validation evidence | Status | Where used / authorization boundary |
 |---|---|---|---|---|---|---|---|
@@ -19,11 +19,11 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 | I-07 | Owner Switch participant ID | Critical | Exact opaque participant ID | Stored in protected env | Participant row and sender identity confirmed; value redacted | **PASS** | Exact allow-list before model/data access |
 | I-08 | Discord server/private channel and bridge status | Critical for Discord path | Discord is preferred interface | Bridge connected; channel exists | Bridge/room present; **Switch reports `channel_public`** | **BLOCKED** | Must be `channel_private` or `@everyone` view denied |
 | I-09 | Isolated test workspace/channel available? | Critical | Use non-production test data | Local test room exists | Only owner, agent, bridge and admin are members; visibility still public | **BLOCKED** | Fix channel privacy before acceptance/demo |
-| I-10 | VPS provider, region, OS, IPv4/hostname | Critical for resilient deployment | Linux VPS with persistent disk | Deferred; local staging only | Local Ubuntu 24.04.5 host | **NOT_APPLICABLE** | Cloud architecture documented only |
-| I-11 | SSH access and operator identity | Critical | Key-only access | Local host access only | Local shell; no VPS SSH configured | **NOT_APPLICABLE** | No production host |
-| I-12 | Persistent disk location and size | Critical | Must persist SQLite and backups | Local `/root/Zasky/data` | 73 GiB free; SQLite on local disk | **NOT_APPLICABLE** | VPS disk deferred |
-| I-13 | VPS monthly cost ceiling | Critical | No assumed free tier | $0 host spend | No VPS provisioned | **NOT_APPLICABLE** | Local only |
-| I-14 | External network/firewall permissions | Critical | Only Switch-required ports + SSH | No public Zasky ports | Health binds `127.0.0.1`; Switch ports localhost-only | **NOT_APPLICABLE** | Production firewall review deferred |
+| I-10 | VPS provider, region, OS, IPv4/hostname | Critical for resilient deployment | Linux VPS with persistent disk | Existing Switch VPS | Docker Compose runs on Ubuntu; Switch 0.31.0 | **PASS** | VPS staging host |
+| I-11 | SSH access and operator identity | Critical | Key-only access | Root shell on Switch VPS | Local/SSH shell; secrets outside repo | **PASS** | VPS administration |
+| I-12 | Persistent disk location and size | Critical | Must persist state and backups | Neon Postgres + local `./data` volume | Neon schema `9f4c1a7b2d30`; synthetic seed loaded | **PASS** | Cloud state + local fallback |
+| I-13 | VPS monthly cost ceiling | Critical | No assumed free tier | Existing VPS; no added host spend | No new VPS provisioned | **PASS** | Existing host |
+| I-14 | External network/firewall permissions | Critical | Only required ports + SSH | Dashboard API `8100` token-gated; health private | Health binds `127.0.0.1:8099`; dashboard binds `0.0.0.0:8100`; Switch remains `8000` | **PASS** | Optional `ufw allow 8100/tcp` |
 | I-15 | OpenAI/OpenRouter API account/key | Critical for hosted model | Store in secret manager/env file | Key stored in protected env | Presence verified without printing; no key in repo | **PASS** | Phase 4; key does not imply spend authority |
 | I-16 | Model identifier and tool-call capability | Critical | Verify a currently supported Chat Completions model | `openai/gpt-4o-mini` via OpenRouter | Live prose and tool-call smoke tests passed 2026-11-06 | **PASS** | Phase 4 |
 | I-17 | Monthly model spend cap | Critical | Hard cap required | **$20/month** | Cap recorded; 80% warning / 100% stop to implement | **PASS** | 80% warning; 100% hard stop |
@@ -48,8 +48,8 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 | I-36 | Google AI TTS or fallback permission | Optional | Check free availability and terms first | Use free/local fallback; no charges | No paid service | **PASS_WITH_DEFAULT** | No charges without authorization |
 | I-37 | Production deployment authority | Critical | **Not granted by default** | **Staging only** | Local staging only | **NOT_APPLICABLE** | No production release |
 | I-38 | Destructive/irreversible action authority | Critical | **Not granted by default** | None | No destructive Zasky actions | **PASS** | No deletion/financial/legal actions |
-| I-39 | Preview/staging deployment authority | Required if VPS deploy occurs | Exact test host/scope | Local staging authorized | Docker container on local host only | **PASS** | Does not authorize production |
-| I-40 | Allowed monthly total cost (VPS + model + optional services) | Critical | No spending assumed | **$20/month** | Model cap $20; VPS $0; no other paid services | **PASS** | Hard stop at cap |
+| I-39 | Preview/staging deployment authority | Required if VPS deploy occurs | Exact test host/scope | VPS staging authorized | Zasky container on Switch VPS; dashboard API on `8100`; Vercel deploy pending operator | **PASS** | Does not authorize production |
+| I-40 | Allowed monthly total cost (VPS + model + optional services) | Critical | No spending assumed | **$20/month** | Model cap $20; existing VPS; no other paid services | **PASS** | Hard stop at cap |
 | I-41 | Current model input/output pricing and effective date | Critical if paid model enabled | Verify exact model pricing at intake | `openai/gpt-4o-mini`: $0.15 input / $0.60 output per 1M | OpenRouter pricing recorded 2026-11-06 | **PASS** | Local cost guard |
 | I-42 | Week start convention | Required | Monday | Confirmed Monday | Owner config seeded; week-boundary tests pass | **PASS** | Placement/capacity calculations |
 
@@ -60,8 +60,8 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 - For noncritical unspecified settings, use the explicit documented defaults in `docs/CONFIGURATION.md`.
 - If model spend or host spend cap is absent, no paid resource may be enabled.
 - If production authority is not explicitly granted, the permitted final state is protected staging/test plus release instructions.
-- The UI-reference image field from the generic workflow is **not applicable**: Zasky's MVP is chat-only and has no frontend. Do not ask the operator for mockups or invent reference assets.
-- The `stageshow` UI skill is **not applicable** to the chat-only MVP. Do not install it unless a frontend becomes part of an explicitly revised scope.
+- The UI-reference image field from the generic workflow is **not applicable**: the operator requested the owner dashboard without a reference image. Do not invent reference assets.
+- The `stageshow` UI skill is **not applicable**; the dashboard is a small purpose-built Next.js app added by explicit scope change.
 
 ## Readiness sign-off (operator inputs, not routine phase approvals)
 
@@ -71,4 +71,4 @@ Priority: `CRITICAL` blocks the affected build path; `OPTIONAL` can use a docume
 - Cost ceilings and spend authorization recorded: **YES** — $20/month, 100 requests/day.
 - Backup destination/restore plan verified: **YES** — online backup and restore integrity drill passed.
 - Production authority: **STAGING ONLY**
-- Intake completed timestamp: `` (partial; 2026-11-06)
+- Intake completed timestamp: `2026-11-07` (staging scope; room privacy still outstanding)

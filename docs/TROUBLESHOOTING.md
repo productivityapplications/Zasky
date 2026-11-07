@@ -17,6 +17,13 @@
 | Database missing after restart | Volume not mounted or wrong DB path | Stop writes, inspect mounts and paths, restore verified backup only after confirmation |
 | Reminder duplicates | Scheduler idempotency not enforced | Verify unique `(local_date,type)` key and transaction |
 | Model errors | OpenRouter quota/key/model/network/schema mismatch | Verify `OPENAI_BASE_URL`, model ID, key presence without printing it; check provider status; bounded retry; clear unavailable response |
+| Neon/Postgres connection fails | Wrong URL, SSL query mismatch, paused project or firewall | Check `DATABASE_URL` presence without printing it; URL normalization handles `sslmode`/`channel_binding`; run `zasky-maintenance status`; verify Neon is awake |
+| `cached statement plan is invalid` | PgBouncer/Neon prepared statement cache after DDL | The app disables asyncpg statement caching; restart the writer after migrations |
+| `value out of int32 range` on Switch sequence | Old `INTEGER` cursor columns | Apply migration `9f4c1a7b2d30`; both sequence columns must be `BIGINT` |
+| Dashboard API 401 | Missing/wrong `DASHBOARD_API_KEY` bearer token | Confirm the Vercel `ZASKY_DASHBOARD_TOKEN` matches the protected env value; never print the token |
+| Dashboard API 503 | Backend token not configured or Vercel token missing | Set `DASHBOARD_API_KEY` on the VPS and `ZASKY_DASHBOARD_TOKEN` in Vercel, then restart/redeploy |
+| Vercel dashboard cannot reach VPS | Port 8100 blocked or wrong `NEXT_PUBLIC_API_URL` | `sudo ufw allow 8100/tcp`; check cloud security group; use `http://VPS_IP:8100` (port 8000 is Switch) |
+| Dashboard shows empty today | No approved plan for the local date | Confirm `TIMEZONE`; approve a `plan_day` proposal or run the dashboard seed script |
 | Spend cap reached | Monthly hard limit | Stop model calls; do not silently raise cap; operator must authorize changed cap |
 | Backup fails | Disk full, encryption key unavailable or SQLite copied unsafely | Preserve DB, free only safe space, use SQLite online backup/checkpoint process; retest restore |
 | `gap` event received | Switch could not replay full continuity | Reread room context; do not interpret old events as fresh commands |
