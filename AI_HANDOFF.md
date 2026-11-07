@@ -48,7 +48,7 @@
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
 | Deployed commit | `0f2bd14` (Discord routing active in recreated container) |
-| Current Git commit | `3b53c9b` |
+| Current Git commit | `c72e666` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 136 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write; Discord notifier routing tests |
