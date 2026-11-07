@@ -1,6 +1,14 @@
 # Zasky — Target Repository Structure
 
-This is the target application repository after implementation. The document package at the root is committed alongside code. There is no `web/`, `frontend/`, `app/`, `pages/` or static website directory in the MVP.
+> **Layout update (2026-11-07):** Planning and implementation documents now live
+> in `docs/` so the repository root stays focused on code, deployment and the
+> README. The tree below records the original target layout; `docs/PROJECT_SPEC.md`,
+> `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/AGENTS.md`,
+> `docs/AI_HANDOFF.md`, `docs/OPERATOR_INTAKE.md`, `docs/REFERENCE_ASSETS.md`,
+> `docs/DEMO_VIDEO_PLAN.md` and `docs/FINAL_PRE_IMPLEMENTATION_AUDIT.md` are the
+> current paths.
+
+This is the target application repository after implementation. The document package is committed alongside code. There is no `web/`, `app/`, `pages/` or static website directory in the MVP; the private Next.js dashboard lives in `frontend/` for the hackathon staging build.
 
 ```text
 zasky/

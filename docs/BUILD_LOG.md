@@ -395,6 +395,25 @@
   message; exact approval commands skip the placeholder.
 - Tests: **113 passed**; `ruff` clean; `mypy src` clean.
 
+## 2026-11-07 — Final repository polish and judge surface
+
+- Moved the planning/implementation document set into `docs/`: `AGENTS.md`,
+  `AI_HANDOFF.md`, `ARCHITECTURE.md`, `DEMO_VIDEO_PLAN.md`,
+  `FINAL_PRE_IMPLEMENTATION_AUDIT.md`, `IMPLEMENTATION_PLAN.md`,
+  `OPERATOR_INTAKE.md`, `PROJECT_SPEC.md`, `REFERENCE_ASSETS.md` and
+  `ZASKY_IMPLEMENTATION_BLUEPRINT.md`. The repository root now contains only
+  `README.md` plus standard deployment/project files.
+- Rebuilt the root README for judges: live dashboard, 97-second demo, Discord
+  invite, sandbox test path, core problem/solution, feature highlights,
+  architecture, and local setup.
+- Added `scripts/post_welcome_guide.py` and posted the formatted Server Guide to
+  `#welcome-and-how-to-test` (message `1568706511142780949`). The guide explains
+  `#zasky-control`, `#judges-sandbox`, the read-only output channels, and the
+  sandbox test commands. Pin was skipped because the bot currently lacks
+  `Manage Messages`; the message itself is live.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; local Markdown links
+  checked with 0 broken targets.
+
 ## Checkpoint template
 
 ```text

@@ -1,5 +1,13 @@
 # Zasky — Architecture and Technical Design
 
+> **Hackathon implementation update — 2026-11-07.** The deployed staging build
+> keeps the deterministic core and Switch transport described below, but uses
+> **Neon Postgres** for authoritative owner state, a private **Next.js dashboard**
+> in `frontend/` on Vercel, and an isolated **SQLite judge sandbox**. Zasky runs
+> two Switch connections: one for `#zasky-control` and one for
+> `#judges-sandbox`. The original MVP design notes below are retained as design
+> history, not as a claim that no dashboard or frontend exists.
+
 > **Implementation adjustment — 2026-11-06.** The operator explicitly selected
 > OpenRouter's OpenAI-compatible **Chat Completions** endpoint and
 > `openai/gpt-4o-mini` for the hackathon staging build, instead of the OpenAI
