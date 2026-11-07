@@ -44,8 +44,8 @@
 | Preview/staging authority | Local staging only; verified |
 | Production authority | Not granted |
 | Current preview URL | None — local container only |
-| Deployed commit | `754b0c3` (proactive alarms and briefing) |
-| Current Git commit | `754b0c3` plus docs checkpoint |
+| Deployed commit | `5492550` (latency tuning) |
+| Current Git commit | `5492550` plus docs checkpoint |
 | UI reference asset | Not applicable |
 | `stageshow` skill | Not applicable; no frontend |
 | Unit/integration/E2E evidence | 113 tests pass; live model/tool E2E; live Discord app-level round-trip observed |
