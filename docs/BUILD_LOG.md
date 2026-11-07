@@ -240,6 +240,17 @@
   thread-aware reply and approval-briefing tests pass.
 - Migration applied locally; health shows schema current.
 
+## 2026-11-07 — Phase 6 latency tuning
+
+- Added OpenRouter `provider.sort=throughput` routing.
+- Made the LLM `httpx.AsyncClient` process-lifetime with explicit keep-alive
+  pooling (10 keepalive connections, 60s expiry).
+- Capped model output at **600 tokens**; live smoke test returned in ~1s.
+- Added an immediate `…` typing placeholder after the owner/room gate. Switch
+  0.31.0 has no message edit/typing operation, so the final reply is a follow-up
+  message; exact approval commands skip the placeholder.
+- Tests: **113 passed**; `ruff` clean; `mypy src` clean.
+
 ## Checkpoint template
 
 ```text

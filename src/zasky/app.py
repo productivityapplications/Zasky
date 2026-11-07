@@ -60,6 +60,7 @@ class ZaskyApp:
                 self._handle_message if self.orchestrator else None
             ),
             approval_handler=self._handle_approval,
+            typing_placeholder=settings.typing_placeholder_enabled,
         )
         self.health_app = create_health_app(self)
 

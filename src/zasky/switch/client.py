@@ -61,6 +61,7 @@ class SwitchClient:
         operations: SwitchOperations | None = None,
         message_handler: MessageHandler | None = None,
         approval_handler: ApprovalHandler | None = None,
+        typing_placeholder: bool = False,
     ) -> None:
         self._settings = settings
         self._db = database
@@ -68,6 +69,7 @@ class SwitchClient:
         self._owns_ops = operations is None
         self._message_handler = message_handler
         self._approval_handler = approval_handler
+        self._typing_placeholder = typing_placeholder
 
         self._stop = asyncio.Event()
         self._terminal = False
@@ -511,6 +513,20 @@ class SwitchClient:
             reply = build_echo_reply(event.data.payload.body)
             outcome = "replied"
         else:
+            if self._typing_placeholder:
+                try:
+                    await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
+                    await self._ops.post_message(
+                        "…", thread_id=event.data.payload.thread_id
+                    )
+                except (TimeoutError, SwitchOperationsError):
+                    logger.warning(
+                        "Typing placeholder post failed",
+                        extra={
+                            "component": "switch",
+                            "error_code": "TYPING_PLACEHOLDER_FAILED",
+                        },
+                    )
             outcome = "replied"
             try:
                 reply = await self._message_handler(event)

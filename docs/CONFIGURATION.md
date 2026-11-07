@@ -21,8 +21,9 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `OPENAI_BASE_URL` | Yes for model | OpenRouter OpenAI-compatible base URL; default `https://openrouter.ai/api/v1` | Server-only; HTTPS |
 | `OPENAI_MODEL` | Yes for model | Verified model ID; default `openai/gpt-4o-mini` | Server-only |
 | `OPENAI_MAX_INPUT_TOKENS` | Yes | Maximum constructed request input tokens; bounds worst-case cost | Positive bounded integer |
-| `OPENAI_MAX_OUTPUT_TOKENS` | Yes | Maximum generated output tokens per request | Positive bounded integer |
+| `OPENAI_MAX_OUTPUT_TOKENS` | Yes | Maximum generated output tokens per request; configured 600 | Positive bounded integer |
 | `OPENAI_STORE` | No | Provider storage flag if supported; default false | Server-only |
+| `TYPING_PLACEHOLDER_ENABLED` | No | Post an immediate `…` placeholder while the model works; default true | Boolean; Switch 0.31.0 has no edit/typing operation |
 | `MAX_LLM_REQUESTS_PER_DAY` | Yes | Daily request hard ceiling | Positive integer; operator may lower |
 | `MAX_LLM_SPEND_USD_MONTH` | Yes | Monthly spend hard ceiling | Required before enabling paid model |
 | `OPENAI_INPUT_USD_PER_1M` | Yes for local cost enforcement | Input price per 1M tokens; configured `0.15` for gpt-4o-mini | Required; verified pricing source/date |

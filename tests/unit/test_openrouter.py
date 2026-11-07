@@ -21,7 +21,7 @@ def configured(settings: Settings) -> Settings:
             "openai_base_url": "https://openrouter.test/api/v1",
             "openai_model": "openai/gpt-4o-mini",
             "openai_max_input_tokens": 24000,
-            "openai_max_output_tokens": 2000,
+            "openai_max_output_tokens": 600,
         }
     )
 
@@ -33,7 +33,8 @@ async def test_chat_completions_response_is_typed(settings: Settings) -> None:
         assert request.headers["Authorization"] == "Bearer test-key"
         body = json.loads(request.content)
         assert body["model"] == "openai/gpt-4o-mini"
-        assert body["max_tokens"] == 2000
+        assert body["max_tokens"] == 600
+        assert body["provider"] == {"sort": "throughput"}
         return httpx.Response(
             200,
             json={

@@ -105,6 +105,19 @@ exact approval command. Reconcile has explicit **KEEP**, **MOVE** and **DROP**
 sections. The model is instructed to use the same style for general messages and
 not to re-format the deterministic blocks.
 
+## Latency tuning (2026-11-07)
+
+- OpenRouter requests include `"provider": {"sort": "throughput"}`.
+- The LLM `httpx.AsyncClient` is process-lifetime with keep-alive pooling
+  (`max_keepalive_connections=10`, 60s expiry); it is not recreated per message.
+- Output is capped at 600 tokens to bound generation time.
+- After the owner/room gate and before the model call, the app posts an immediate
+  `…` placeholder. Switch 0.31.0 has no message-edit operation, so the final
+  reply follows as a second message rather than editing the placeholder. This is
+  a provider limitation, not a fabricated typing indicator.
+- Exact `approve`/`reject` commands skip the placeholder because they are handled
+  deterministically without a model call.
+
 ## Native Switch capability audit (2026-11-06)
 
 Switch 0.31.0 exposes 53 agent operations. It has `post_message` with an

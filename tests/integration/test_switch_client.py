@@ -462,3 +462,56 @@ async def test_unauthorized_events_never_reach_message_handler(
         with contextlib.suppress(Exception):
             await asyncio.wait_for(db.close(close_connections=False), timeout=3)
         await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_typing_placeholder_precedes_final_reply(tmp_path, settings: Settings) -> None:
+    fake = FakeSwitchServer()
+    await fake.start()
+    http_client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fake.http_app()),
+        base_url="http://switch.test",
+    )
+    db = Database(f"sqlite+aiosqlite:///{tmp_path / 'typing.db'}")
+    await db.init()
+
+    async def message_handler(event):
+        return "Final answer"
+
+    test_settings = settings.model_copy(
+        update={
+            "switch_ws_url": f"ws://127.0.0.1:{fake.port}/agents/agent-1/connection/ws",
+            "switch_reconnect_min_seconds": 0.05,
+            "switch_reconnect_max_seconds": 0.2,
+        }
+    )
+    client = SwitchClient(
+        test_settings,
+        db,
+        SwitchOperations(test_settings, client=http_client),
+        message_handler=message_handler,
+        typing_placeholder=True,
+    )
+    task = asyncio.create_task(client.run())
+    try:
+        websocket = await fake.next_connection()
+        await websocket.send(connection_state())
+        await wait_until(lambda: client.is_ready)
+        await websocket.send(message_frame(1, body="What is my plan?"))
+        await wait_until(lambda: len(fake.posts) == 2)
+        assert fake.posts[0] == "…"
+        assert fake.posts[1] == "Final answer"
+        assert fake.post_payloads[0].get("thread_id") is None
+    finally:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(client.close(), timeout=3)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(http_client.aclose(), timeout=3)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(fake.stop(), timeout=4)
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(db.close(close_connections=False), timeout=3)
+        await asyncio.sleep(0.2)

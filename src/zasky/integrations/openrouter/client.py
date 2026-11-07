@@ -63,9 +63,16 @@ class OpenRouterClient:
     ) -> None:
         self._settings = settings
         self._owns_client = client is None
+        # One long-lived client: keep TLS sessions warm and reuse pooled
+        # connections across messages.
         self._client = client or httpx.AsyncClient(
             base_url=settings.openai_base_url,
             timeout=httpx.Timeout(settings.llm_request_timeout_seconds),
+            limits=httpx.Limits(
+                max_connections=20,
+                max_keepalive_connections=10,
+                keepalive_expiry=60.0,
+            ),
         )
 
     async def close(self) -> None:
@@ -85,6 +92,7 @@ class OpenRouterClient:
             "messages": messages,
             "temperature": 0.2,
             "max_tokens": self._settings.openai_max_output_tokens,
+            "provider": {"sort": "throughput"},
         }
         if tools:
             payload["tools"] = chat_tool_definitions() if tools is TOOL_DEFINITIONS else tools

@@ -77,6 +77,9 @@ context. It does not persist raw room messages in SQLite. A request containing
 - Focus mode is conversational. If you are already in a thread, Zasky replies
   in that thread. Switch 0.31.0 does not expose thread creation, so Zasky cannot
   create a new thread programmatically.
+- While the model is working you may see a `…` placeholder followed by the
+  answer. Switch 0.31.0 has no message-edit or native typing operation, so the
+  placeholder cannot be edited or deleted.
 - No third-party calendar, Google, or direct Discord API is used.
 
 ## Boundaries

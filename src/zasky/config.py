@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     openai_model: str = "openai/gpt-4o-mini"
     openai_store: bool = False
     openai_max_input_tokens: int = Field(default=24000, ge=1, le=200000)
-    openai_max_output_tokens: int = Field(default=2000, ge=1, le=32000)
+    openai_max_output_tokens: int = Field(default=600, ge=1, le=32000)
     max_llm_requests_per_day: int = Field(default=100, ge=1, le=10000)
     max_llm_spend_usd_month: float = Field(default=20.0, gt=0, le=10000)
     openai_input_usd_per_1m: float = Field(default=0.15, ge=0)
@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     llm_max_tool_cycles: int = Field(default=5, ge=1, le=5)
     llm_max_proposals_per_message: int = Field(default=2, ge=1, le=2)
     llm_request_timeout_seconds: float = Field(default=60.0, ge=5, le=120)
+    typing_placeholder_enabled: bool = True
 
     # Planning profile. Defaults are safe staging values; the operator confirms
     # or overrides them during intake.
