@@ -86,8 +86,11 @@ class ZaskyApp:
             execution=self.execution,
             discord=self.discord,
         )
+        main_client_settings = settings.model_copy(
+            update={"sandbox_switch_room_id": None}
+        )
         self.switch = SwitchClient(
-            settings,
+            main_client_settings,
             self.db,
             self.ops,
             message_handler=(
@@ -96,6 +99,8 @@ class ZaskyApp:
             approval_handler=self._handle_approval,
             typing_placeholder=settings.typing_placeholder_enabled,
         )
+        self.sandbox_switch: SwitchClient | None = None
+        self.sandbox_ops: SwitchOperations | None = None
         self.health_app = create_health_app(self)
         self.dashboard_app = create_dashboard_app(self)
         self.sandbox: SandboxScope | None = None
@@ -123,6 +128,7 @@ class ZaskyApp:
         self._dashboard_server: uvicorn.Server | None = None
         self._dashboard_task: asyncio.Task[None] | None = None
         self._switch_task: asyncio.Task[None] | None = None
+        self._sandbox_switch_task: asyncio.Task[None] | None = None
         self._alarm_task: asyncio.Task[None] | None = None
         self.schema_revision: str | None = None
         self.schema_ready = False
@@ -194,6 +200,10 @@ class ZaskyApp:
                 },
             )
         self._switch_task = asyncio.create_task(self.switch.run(), name="zasky-switch")
+        if self.sandbox_switch is not None:
+            self._sandbox_switch_task = asyncio.create_task(
+                self.sandbox_switch.run(), name="zasky-sandbox-switch"
+            )
         self._alarm_task = asyncio.create_task(
             self.alarm_scheduler.run(), name="zasky-alarms"
         )
@@ -201,6 +211,8 @@ class ZaskyApp:
     async def stop(self) -> None:
         logger.info("Zasky stopping", extra={"component": "app"})
         await self.switch.close()
+        if self.sandbox_switch is not None:
+            await self.sandbox_switch.close()
         await self.alarm_scheduler.stop()
         if self._health_server is not None:
             self._health_server.should_exit = True
@@ -210,6 +222,7 @@ class ZaskyApp:
             self._switch_task,
             self._health_task,
             self._dashboard_task,
+            self._sandbox_switch_task,
             self._alarm_task,
         ):
             if task is None:
@@ -221,9 +234,12 @@ class ZaskyApp:
         self._switch_task = None
         self._health_task = None
         self._dashboard_task = None
+        self._sandbox_switch_task = None
         if self.llm is not None:
             await self.llm.close()
         await self.discord.close()
+        if self.sandbox_ops is not None:
+            await self.sandbox_ops.close()
         if self.sandbox is not None:
             await self.sandbox.db.close(close_connections=False)
         await self.db.close()
@@ -237,6 +253,24 @@ class ZaskyApp:
         try:
             sandbox = await build_sandbox_scope(self.settings)
             self.sandbox = sandbox
+            sandbox_switch_settings = sandbox.settings.model_copy(
+                update={
+                    "switch_room_id": sandbox.room_id,
+                    "sandbox_switch_room_id": sandbox.room_id,
+                    "switch_connection_id": (
+                        f"{self.settings.switch_connection_id}-sandbox"
+                    ),
+                }
+            )
+            self.sandbox_ops = SwitchOperations(sandbox_switch_settings)
+            self.sandbox_switch = SwitchClient(
+                sandbox_switch_settings,
+                sandbox.db,
+                self.sandbox_ops,
+                message_handler=self._handle_message,
+                approval_handler=self._handle_approval,
+                typing_placeholder=False,
+            )
             if self.llm is not None and self.cost_guard is not None:
                 self.sandbox_orchestrator = AgentOrchestrator(
                     sandbox.settings,
@@ -245,7 +279,7 @@ class ZaskyApp:
                     ContextBuilder(sandbox.db, sandbox.settings),
                     self.cost_guard,
                     history_provider=lambda: self._recent_room_history(
-                        sandbox.room_id
+                        sandbox.room_id, self.sandbox_ops
                     ),
                 )
             self.sandbox_coordinator = ExecutionCoordinator(
@@ -501,9 +535,12 @@ class ZaskyApp:
         )
 
     async def _recent_room_history(
-        self, room_id: str | None = None
+        self,
+        room_id: str | None = None,
+        operations: SwitchOperations | None = None,
     ) -> list[dict[str, object]]:
-        context = await self.ops.read_context(limit=20, room_id=room_id)
+        ops = operations or self.ops
+        context = await ops.read_context(limit=20, room_id=room_id)
         threads = context.get("threads", [])
         entries: list[dict[str, object]] = []
         if isinstance(threads, list):

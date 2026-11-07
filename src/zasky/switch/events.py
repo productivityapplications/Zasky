@@ -67,7 +67,7 @@ class GapFrame(BaseModel):
     type: Literal["gap"] = "gap"
     from_sequence: int | None = None
     resumed_at: int | None = None
-    resumed_position: int | None = None
+    resumed_position: dict[str, int] | None = None
     rooms: list[str] = Field(default_factory=list)
     all_rooms: bool = False
     reason: str | None = None

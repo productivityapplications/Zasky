@@ -270,7 +270,7 @@ async def test_gap_rereads_context_before_reply(
                 "data": {
                     "from_sequence": 0,
                     "resumed_at": 1,
-                    "resumed_position": 1,
+                    "resumed_position": {"s": 1},
                     "rooms": ["room-1"],
                     "all_rooms": False,
                     "reason": "test",

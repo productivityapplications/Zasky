@@ -227,7 +227,10 @@ class SwitchClient:
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
         query["connection_id"] = self._settings.switch_connection_id
         rooms = [self._settings.switch_room_id]
-        if self._settings.sandbox_switch_room_id:
+        if (
+            self._settings.sandbox_switch_room_id
+            and self._settings.sandbox_switch_room_id not in rooms
+        ):
             rooms.append(self._settings.sandbox_switch_room_id)
         query["rooms"] = ",".join(rooms)
         # The sandbox accepts ordinary judge messages even when Discord does not
@@ -404,7 +407,9 @@ class SwitchClient:
 
     async def _handle_gap(self, frame: dict[str, Any]) -> None:
         gap = GapFrame.model_validate(frame)
-        resumed = gap.resumed_at or gap.resumed_position
+        # resumed_at is the ticket/number used by start_from; resumed_position
+        # is a source→sequence map and is not comparable to that cursor.
+        resumed = gap.resumed_at
         if resumed is not None:
             self._highest_processed = max(self._highest_processed, resumed)
             await self._db.advance_cursor(
