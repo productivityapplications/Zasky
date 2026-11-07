@@ -809,7 +809,7 @@ function DelegateModal({
               <span className="meta-pill">
                 {state.discordDelivered
                   ? "Also posted to #ai-workspace"
-                  : "Workspace channel not configured"}
+                  : "Not posted to #ai-workspace"}
               </span>
             </div>
             <pre className="delegate-output">{state.output}</pre>
