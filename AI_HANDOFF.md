@@ -47,8 +47,8 @@
 | Preview/staging authority | Verified VPS staging; Vercel deployment pending operator |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
-| Deployed commit | Pending final commit of this checkpoint |
-| Current Git commit | Pending final commit of this checkpoint |
+| Deployed commit | `b52cfdb` (Neon Postgres + owner dashboard) |
+| Current Git commit | `b52cfdb` plus docs checkpoint |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 124 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write |
