@@ -6,14 +6,17 @@ import asyncio
 import contextlib
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
 import uvicorn
+from fastapi import FastAPI
 from sqlalchemy.engine import make_url
 
 from zasky.access.approvals import ApprovalCommand, is_conversational_approval
 from zasky.agent.briefing import BriefingBuilder
 from zasky.agent.context import ContextBuilder
 from zasky.agent.execution import ExecutionSubAgent, ExecutionSubAgentError
+from zasky.agent.execution_coordinator import ExecutionCoordinator
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
 from zasky.domain.delegation import DelegationService
@@ -30,6 +33,7 @@ from zasky.ops.dashboard_api import create_dashboard_app
 from zasky.ops.health import create_health_app
 from zasky.ops.lock import SingleWriterLock
 from zasky.ops.maintenance import head_revision
+from zasky.ops.sandbox import SandboxScope, build_sandbox_scope
 from zasky.scheduler.alarms import AlarmScheduler
 from zasky.storage.database import Database
 from zasky.storage.repositories import OwnerConfigRepository
@@ -75,6 +79,13 @@ class ZaskyApp:
             self.execution = ExecutionSubAgent(
                 settings, self.llm, self.cost_guard
             )
+        self.execution_coordinator = ExecutionCoordinator(
+            settings=settings,
+            domain=self.domain,
+            delegations=self.delegations,
+            execution=self.execution,
+            discord=self.discord,
+        )
         self.switch = SwitchClient(
             settings,
             self.db,
@@ -87,6 +98,11 @@ class ZaskyApp:
         )
         self.health_app = create_health_app(self)
         self.dashboard_app = create_dashboard_app(self)
+        self.sandbox: SandboxScope | None = None
+        self.sandbox_orchestrator: AgentOrchestrator | None = None
+        self.sandbox_coordinator: ExecutionCoordinator | None = None
+        self.sandbox_dashboard_app: FastAPI | None = None
+        self._dashboard_asgi: FastAPI = self.dashboard_app
 
         parsed_database = make_url(settings.database_url)
         database_path = parsed_database.database
@@ -127,6 +143,7 @@ class ZaskyApp:
             )
         else:
             await OwnerConfigRepository(self.db).ensure_seeded(self.settings)
+        await self._init_sandbox()
         logger.info(
             "Zasky starting",
             extra={"component": "app"},
@@ -152,7 +169,7 @@ class ZaskyApp:
             and self.settings.dashboard_api_key.get_secret_value().strip()
         ):
             dashboard_config = uvicorn.Config(
-                self.dashboard_app,
+                self._dashboard_asgi,
                 host=self.settings.dashboard_bind_host,
                 port=self.settings.dashboard_port,
                 log_config=None,
@@ -207,9 +224,66 @@ class ZaskyApp:
         if self.llm is not None:
             await self.llm.close()
         await self.discord.close()
+        if self.sandbox is not None:
+            await self.sandbox.db.close(close_connections=False)
         await self.db.close()
         await self.ops.close()
         self._lock.release()
+
+    async def _init_sandbox(self) -> None:
+        if not self.settings.sandbox_enabled:
+            self._dashboard_asgi = self.dashboard_app
+            return
+        try:
+            sandbox = await build_sandbox_scope(self.settings)
+            self.sandbox = sandbox
+            if self.llm is not None and self.cost_guard is not None:
+                self.sandbox_orchestrator = AgentOrchestrator(
+                    sandbox.settings,
+                    sandbox.domain,
+                    self.llm,
+                    ContextBuilder(sandbox.db, sandbox.settings),
+                    self.cost_guard,
+                    history_provider=lambda: self._recent_room_history(
+                        sandbox.room_id
+                    ),
+                )
+            self.sandbox_coordinator = ExecutionCoordinator(
+                settings=sandbox.settings,
+                domain=sandbox.domain,
+                delegations=sandbox.delegations,
+                execution=self.execution,
+                discord=self.discord,
+            )
+            scope = SimpleNamespace(
+                db=sandbox.db,
+                domain=sandbox.domain,
+                delegate_from_dashboard=(
+                    self.sandbox_coordinator.delegate_from_dashboard
+                ),
+                approve_execution=self.sandbox_coordinator.approve_execution,
+            )
+            self.sandbox_dashboard_app = create_dashboard_app(
+                self, scope=scope
+            )
+            parent = FastAPI()
+            parent.mount("/sandbox", self.sandbox_dashboard_app)
+            parent.mount("/", self.dashboard_app)
+            self._dashboard_asgi = parent
+            logger.info(
+                "Judge sandbox initialized",
+                extra={"component": "sandbox"},
+            )
+        except Exception:
+            logger.exception(
+                "Judge sandbox initialization failed",
+                extra={"component": "sandbox"},
+            )
+            self.sandbox = None
+            self.sandbox_orchestrator = None
+            self.sandbox_coordinator = None
+            self.sandbox_dashboard_app = None
+            self._dashboard_asgi = self.dashboard_app
 
     async def _post_daily_briefing(self, local_date: str) -> str:
         try:
@@ -341,124 +415,42 @@ class ZaskyApp:
         instruction: str | None = None,
         execution_code: str | None = None,
     ) -> dict[str, object]:
-        """Run the bounded Execution Sub-Agent for one owner-selected task."""
-        if self.execution is None:
-            raise ExecutionSubAgentError(
-                "MODEL_UNAVAILABLE",
-                "The execution sub-agent needs a configured model.",
-            )
-        task = await self.domain.task_detail(task_id)
-        if task["status"] in {"completed", "cancelled"}:
-            raise ExecutionSubAgentError(
-                "CONFLICT",
-                "A completed or cancelled task cannot be delegated.",
-            )
-        result = await self.execution.run(task=task, instruction=instruction)
-        output = str(result["output"])
-        if execution_code:
-            await self.delegations.mark_awaiting_signoff(
-                execution_code, output
-            )
-        delivered = False
-        try:
-            body = (
-                self._execution_signoff(output, execution_code)
-                if execution_code
-                else output
-            )
-            delivered = await self.publish_execution_result(
-                title=str(task["title"]),
-                body=body,
-                task_id=task_id,
-            )
-        except DiscordNotificationError as exc:
-            logger.error(
-                "Execution result channel delivery failed",
-                extra={
-                    "component": "discord",
-                    "error_code": exc.code,
-                },
-            )
-        return {
-            "task_id": task_id,
-            "title": task["title"],
-            "output": output,
-            "model": result["model"],
-            "prompt_tokens": result["prompt_tokens"],
-            "completion_tokens": result["completion_tokens"],
-            "discord_delivered": delivered,
-            "execution_code": execution_code,
-        }
-
-    @staticmethod
-    def _execution_signoff(output: str, execution_code: str | None) -> str:
-        if not execution_code:
-            return output
-        return (
-            f"{output}\n\n---\n"
-            "**Please review the deliverable above.** If this meets your "
-            "standards, reply "
-            f"`approve execution {execution_code}` to mark the task complete."
+        return await self.execution_coordinator.delegate_task(
+            task_id, instruction, execution_code=execution_code
         )
 
     async def delegate_from_dashboard(
         self, task_id: str, instruction: str | None = None
     ) -> dict[str, object]:
-        """Start the same two-step delegation flow from the owner dashboard."""
-        if self.execution is None:
-            raise ExecutionSubAgentError(
-                "MODEL_UNAVAILABLE",
-                "The execution sub-agent needs a configured model.",
-            )
-        proposal = await self.delegations.propose(task_id)
-        started = await self.delegations.start(
-            str(proposal["code"]),
-            actor_id=self.settings.owner_switch_participant_id,
+        return await self.execution_coordinator.delegate_from_dashboard(
+            task_id, instruction
         )
-        if started.get("already") == "awaiting_signoff":
-            return {
-                "task_id": task_id,
-                "title": started.get("task_title"),
-                "output": started.get("output_markdown"),
-                "execution_code": started.get("execution_code"),
-                "discord_delivered": False,
-                "already": "awaiting_signoff",
-            }
-        if started.get("already") == "completed":
-            return {
-                "task_id": task_id,
-                "title": started.get("task_title"),
-                "output": "",
-                "execution_code": started.get("execution_code"),
-                "discord_delivered": False,
-                "already": "completed",
-            }
-        if started.get("already") == "running":
-            raise ExecutionSubAgentError(
-                "CONFLICT",
-                "An execution is already running for this task.",
-            )
-        execution_code = str(started["execution_code"])
-        try:
-            return await self.delegate_task(
-                task_id, instruction, execution_code=execution_code
-            )
-        except ExecutionSubAgentError as exc:
-            await self.delegations.mark_failed(execution_code, exc.code)
-            raise
 
     async def approve_execution(self, execution_code: str) -> dict[str, object]:
-        return await self.delegations.approve_execution(
-            execution_code,
-            actor_id=self.settings.owner_switch_participant_id,
-            domain=self.domain,
-        )
+        return await self.execution_coordinator.approve_execution(execution_code)
+
+    def _sandbox_for_room(self, room_id: str) -> SandboxScope | None:
+        if (
+            self.sandbox is not None
+            and self.settings.sandbox_switch_room_id
+            and room_id == self.settings.sandbox_switch_room_id
+        ):
+            return self.sandbox
+        return None
 
     async def _handle_message(self, event: MessageEvent) -> str:
-        if self.orchestrator is None:
+        sandbox = self._sandbox_for_room(event.data.room_id)
+        orchestrator = (
+            self.sandbox_orchestrator if sandbox is not None else self.orchestrator
+        )
+        if orchestrator is None:
             return "The model is not configured. Nothing changed."
+        domain = sandbox.domain if sandbox is not None else self.domain
+        delegations = (
+            sandbox.delegations if sandbox is not None else self.delegations
+        )
         if is_conversational_approval(event.data.payload.body):
-            codes = await self.domain.pending_codes()
+            codes = await domain.pending_codes()
             if codes:
                 code = sorted(codes)[0]
                 return (
@@ -466,21 +458,28 @@ class ZaskyApp:
                     f"`approve {code}` to lock this in."
                 )
         delegation_offer = await self._maybe_offer_delegation(
-            event.data.payload.body
+            event.data.payload.body, delegations
         )
         if delegation_offer is not None:
             return delegation_offer
-        return await self.orchestrator.handle_message(event)
+        return await orchestrator.handle_message(event)
 
-    async def _maybe_offer_delegation(self, text: str) -> str | None:
+    async def _maybe_offer_delegation(
+        self, text: str, delegations: DelegationService | None = None
+    ) -> str | None:
         """Create a deterministic delegation proposal when the owner is stuck."""
-        if not self.delegations.looks_like_trigger(text):
+        active = delegations or self.delegations
+        if not active.looks_like_trigger(text):
             return None
-        task = await self.delegations.find_task_from_text(text)
+        task = await active.find_task_from_text(text)
         if task is None:
             return None
+        if task.get("execution_type") != "ai":
+            return (
+                "This task requires your physical presence, I cannot delegate it."
+            )
         try:
-            proposal = await self.delegations.propose(str(task["id"]))
+            proposal = await active.propose(str(task["id"]))
         except DomainError:
             return None
         title = _escape_md(str(task["title"]))
@@ -501,8 +500,10 @@ class ZaskyApp:
             f"`delegate {proposal['code']}`."
         )
 
-    async def _recent_room_history(self) -> list[dict[str, object]]:
-        context = await self.ops.read_context(limit=20)
+    async def _recent_room_history(
+        self, room_id: str | None = None
+    ) -> list[dict[str, object]]:
+        context = await self.ops.read_context(limit=20, room_id=room_id)
         threads = context.get("threads", [])
         entries: list[dict[str, object]] = []
         if isinstance(threads, list):
@@ -543,12 +544,33 @@ class ZaskyApp:
     async def _handle_approval(
         self, command: ApprovalCommand, event: MessageEvent
     ) -> tuple[str, str]:
+        sandbox = self._sandbox_for_room(event.data.room_id)
+        domain = sandbox.domain if sandbox is not None else self.domain
+        coordinator = (
+            self.sandbox_coordinator
+            if sandbox is not None
+            else self.execution_coordinator
+        )
         if command.action == "delegate":
-            return await self._handle_delegate_command(command, event)
+            if coordinator is None:
+                return (
+                    "The Execution Agent needs a configured model. Nothing changed.",
+                    "failed",
+                )
+            return await self._handle_delegate_command(
+                command, event, coordinator
+            )
         if command.action == "approve_execution":
-            return await self._handle_execution_approval(command, event)
+            if coordinator is None:
+                return (
+                    "The Execution Agent needs a configured model. Nothing changed.",
+                    "failed",
+                )
+            return await self._handle_execution_approval(
+                command, event, coordinator
+            )
         try:
-            result = await self.domain.resolve_proposal(
+            result = await domain.resolve_proposal(
                 action=command.action,
                 code=command.code,
                 actor_id=event.data.payload.sender,
@@ -564,11 +586,11 @@ class ZaskyApp:
         if result.get("status") == "approved":
             note = ""
             applied = result.get("applied", {})
-            if result.get("proposal_type") == "day":
+            if sandbox is None and result.get("proposal_type") == "day":
                 local_date = applied.get("date") if isinstance(applied, dict) else None
                 if isinstance(local_date, str):
                     note = await self._post_daily_briefing(local_date)
-            elif result.get("proposal_type") == "reconcile":
+            elif sandbox is None and result.get("proposal_type") == "reconcile":
                 if isinstance(applied, dict):
                     note = await self._post_reconcile_summary(code, applied)
             return (
@@ -593,8 +615,15 @@ class ZaskyApp:
             "approval_applied",
         )
 
+    @staticmethod
+    def _execution_signoff(output: str, execution_code: str | None) -> str:
+        return ExecutionCoordinator._execution_signoff(output, execution_code)
+
     async def _handle_delegate_command(
-        self, command: ApprovalCommand, event: MessageEvent
+        self,
+        command: ApprovalCommand,
+        event: MessageEvent,
+        coordinator: ExecutionCoordinator,
     ) -> tuple[str, str]:
         if command.code is None:
             return ("A delegation code is required. Nothing changed.", "failed")
@@ -604,7 +633,7 @@ class ZaskyApp:
                 "failed",
             )
         try:
-            started = await self.delegations.start(
+            started = await coordinator.start(
                 command.code, actor_id=event.data.payload.sender
             )
         except DomainError as exc:
@@ -637,19 +666,21 @@ class ZaskyApp:
         task_id = str(started["task_id"])
         task_title = _escape_md(str(started["task_title"]))
         try:
-            result = await self.delegate_task(
+            result = await coordinator.delegate_task(
                 task_id,
                 instruction=command.instructions,
                 execution_code=execution_code,
             )
         except ExecutionSubAgentError as exc:
-            await self.delegations.mark_failed(execution_code, exc.code)
+            await coordinator.mark_failed(execution_code, exc.code)
             return (
                 f"⚠️ **Execution failed** `{execution_code}`\n\n"
                 f"{exc.message}\n\nNothing changed.",
                 "failed",
             )
-        if not result.get("discord_delivered"):
+        if not result.get("discord_delivered") and self._sandbox_for_room(
+            event.data.room_id
+        ) is None:
             fallback = self._execution_signoff(
                 str(result["output"]), execution_code
             )
@@ -678,16 +709,15 @@ class ZaskyApp:
         )
 
     async def _handle_execution_approval(
-        self, command: ApprovalCommand, event: MessageEvent
+        self,
+        command: ApprovalCommand,
+        event: MessageEvent,
+        coordinator: ExecutionCoordinator,
     ) -> tuple[str, str]:
         if command.code is None:
             return ("An execution code is required. Nothing changed.", "failed")
         try:
-            result = await self.delegations.approve_execution(
-                command.code,
-                actor_id=event.data.payload.sender,
-                domain=self.domain,
-            )
+            result = await coordinator.approve_execution(command.code)
         except DomainError as exc:
             return (
                 f"⚠️ **Not completed**\n\n{exc.message}\n\n"

@@ -30,9 +30,11 @@ export function NavigationRail({
 }) {
   return (
     <aside className="hidden h-full flex-col items-center gap-4 rounded-panel bg-rail px-2 py-4 md:flex">
-      <div className="grid h-10 w-10 place-items-center rounded-2xl bg-ink text-sm font-bold text-white shadow-card">
-        Z
-      </div>
+      <img
+        src="/favicon.svg"
+        alt="Zasky"
+        className="h-10 w-10 rounded-2xl shadow-card"
+      />
 
       <div className="h-px w-6 bg-black/15" />
 
@@ -68,9 +70,6 @@ export function NavigationRail({
         <CalendarDays size={18} strokeWidth={2} />
       </a>
 
-      <div className="mt-auto grid h-10 w-10 place-items-center rounded-full bg-ink text-[11px] font-bold text-white ring-4 ring-white/60">
-        OW
-      </div>
     </aside>
   );
 }

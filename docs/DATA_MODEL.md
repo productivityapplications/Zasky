@@ -106,6 +106,7 @@ Concrete work units in the approved weekly pool.
 | `resume_note` | TEXT | No | required when parked, max 1000 chars |
 | `actual_min` | INTEGER | No | >= 0; owner supplied |
 | `ad_hoc` | BOOLEAN | Yes | false; true only after explicit owner ad hoc flag; must match parent placement source type |
+| `execution_type` | TEXT | Yes | `human` or `ai`; default `human`. Only `ai` tasks may enter delegation. |
 | `created_at`, `updated_at` | DATETIME | Yes | UTC |
 | `completed_at` | DATETIME | No | UTC |
 
@@ -316,3 +317,16 @@ The table is written by deterministic application code, never by the model.
 `delegate ZK-XXXX` moves a pending record to `running` and creates the execution
 code. The sub-agent output moves it to `awaiting_signoff`. Only
 `approve execution ZK-YYYY` completes the task and marks the record `completed`.
+
+## 19. `execution_type` and the judge sandbox
+
+`week_tasks.execution_type` is a hard product boundary:
+
+- `human` — physical presence or personal authority; never delegatable.
+- `ai` — digital knowledge work; eligible for the Execution Agent workflow.
+
+The judge sandbox is an isolated SQLite database, selected by
+`SANDBOX_DATABASE_URL` and mounted at `/sandbox/api/dashboard` on the dashboard
+API. It never writes to the owner Neon database. The optional
+`SANDBOX_SWITCH_ROOM_ID` routes a dedicated Discord room to the same sandbox
+scope.

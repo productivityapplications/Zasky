@@ -87,6 +87,7 @@ class SwitchClient:
         self._worker_task: asyncio.Task[None] | None = None
         self._room_init_task: asyncio.Task[None] | None = None
         self._websocket: Any = None
+        self._room_post_lock = asyncio.Lock()
 
     @property
     def is_connected(self) -> bool:
@@ -225,7 +226,10 @@ class SwitchClient:
         parts = urlsplit(self._settings.resolved_ws_url)
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
         query["connection_id"] = self._settings.switch_connection_id
-        query["rooms"] = self._settings.switch_room_id
+        rooms = [self._settings.switch_room_id]
+        if self._settings.sandbox_switch_room_id:
+            rooms.append(self._settings.sandbox_switch_room_id)
+        query["rooms"] = ",".join(rooms)
         query["filter"] = "addressed"
         if self._highest_processed > 0:
             query["start_from"] = str(self._highest_processed)
@@ -307,9 +311,14 @@ class SwitchClient:
 
     async def _handle_connection_state(self, frame: dict[str, Any]) -> None:
         state = ConnectionStateFrame.model_validate(frame)
-        if self._settings.switch_room_id not in state.rooms:
+        allowed_rooms = {self._settings.switch_room_id}
+        if self._settings.sandbox_switch_room_id:
+            allowed_rooms.add(self._settings.sandbox_switch_room_id)
+        if not allowed_rooms.intersection(state.rooms):
             self._terminal = True
-            raise SwitchProtocolError("configured room not present in connection_state")
+            raise SwitchProtocolError(
+                "configured room not present in connection_state"
+            )
 
         self._generation = str(state.generation) if state.generation is not None else None
         self._protocol_revision = (
@@ -491,9 +500,11 @@ class SwitchClient:
                     outcome = "failed"
             try:
                 await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
-                await self._ops.post_message(
-                reply, thread_id=event.data.payload.thread_id
-            )
+                await self._post_reply(
+                    reply,
+                    event,
+                    thread_id=event.data.payload.thread_id,
+                )
             except (TimeoutError, SwitchOperationsError) as exc:
                 outcome = "failed"
                 logger.error(
@@ -528,7 +539,9 @@ class SwitchClient:
             reply = build_echo_reply(event.data.payload.body)
             outcome = "replied"
         else:
-            if self._typing_placeholder:
+            if self._typing_placeholder and event.data.room_id == (
+                self._settings.switch_room_id
+            ):
                 try:
                     await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
                     await self._ops.post_message(
@@ -558,8 +571,10 @@ class SwitchClient:
                 outcome = "failed"
         try:
             await asyncio.wait_for(self._room_ready.wait(), timeout=15.0)
-            await self._ops.post_message(
-                reply, thread_id=event.data.payload.thread_id
+            await self._post_reply(
+                reply,
+                event,
+                thread_id=event.data.payload.thread_id,
             )
         except TimeoutError:
             outcome = "failed"
@@ -600,6 +615,27 @@ class SwitchClient:
                 "outcome": outcome,
             },
         )
+
+    async def _post_reply(
+        self,
+        body: str,
+        event: MessageEvent,
+        *,
+        thread_id: str | None = None,
+    ) -> None:
+        room_id = event.data.room_id
+        if room_id == self._settings.switch_room_id:
+            await self._ops.post_message(body, thread_id=thread_id)
+            return
+        sandbox_room = self._settings.sandbox_switch_room_id
+        if sandbox_room is None or room_id != sandbox_room:
+            raise SwitchOperationsError("reply room is not allowed")
+        async with self._room_post_lock:
+            await self._ops.connect_to_room(sandbox_room)
+            try:
+                await self._ops.post_message(body, thread_id=thread_id)
+            finally:
+                await self._ops.connect_to_room(self._settings.switch_room_id)
 
     def _drain_queue(self) -> None:
         while not self._queue.empty():

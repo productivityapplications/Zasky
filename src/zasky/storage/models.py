@@ -200,6 +200,10 @@ class WeekTask(Base):
             name="ck_week_tasks_status",
         ),
         CheckConstraint(
+            "execution_type IN ('human','ai')",
+            name="ck_week_tasks_execution_type",
+        ),
+        CheckConstraint(
             "status != 'parked' OR (resume_note IS NOT NULL AND length(resume_note) > 0)",
             name="ck_week_tasks_parked_note",
         ),
@@ -219,6 +223,9 @@ class WeekTask(Base):
     resume_note: Mapped[str | None] = mapped_column(Text)
     actual_min: Mapped[int | None] = mapped_column(Integer)
     ad_hoc: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    execution_type: Mapped[str] = mapped_column(
+        String(6), nullable=False, default="human", server_default="human"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

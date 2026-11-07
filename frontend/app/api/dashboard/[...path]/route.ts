@@ -10,6 +10,7 @@ const API_BASE = (
   "http://127.0.0.1:8100"
 ).replace(/\/+$/, "");
 const DASHBOARD_TOKEN = process.env.ZASKY_DASHBOARD_TOKEN ?? "";
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 const ALLOWED_ROOTS = new Set([
   "today",
@@ -46,7 +47,8 @@ async function forward(
     return jsonError("The dashboard API URL must use http:// or https://.", 503);
   }
 
-  const target = `${API_BASE}/api/dashboard/${path
+  const prefix = DEMO_MODE ? "/sandbox/api/dashboard" : "/api/dashboard";
+  const target = `${API_BASE}${prefix}/${path
     .map(encodeURIComponent)
     .join("/")}${request.nextUrl.search}`;
 

@@ -77,7 +77,9 @@ async def make_app(tmp_path, settings: Settings):
         app.db, start_utc=datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
     )
     app.execution = FakeExecution()  # type: ignore[assignment]
+    app.execution_coordinator._execution = app.execution  # type: ignore[attr-defined]
     app.discord = FakeDiscord()  # type: ignore[assignment]
+    app.execution_coordinator._discord = app.discord  # type: ignore[attr-defined]
     return app
 
 
@@ -118,6 +120,7 @@ async def test_delegate_command_runs_subagent_and_signoff_completes_task(
                 instructions="Use a casual tone and keep it under 90 seconds.",
             ),
             event(),
+            app.execution_coordinator,
         )
         assert outcome == "approval_applied"
         assert "Execution ready" in reply
@@ -140,6 +143,7 @@ async def test_delegate_command_runs_subagent_and_signoff_completes_task(
                 action="approve_execution", code=execution.group(1)
             ),
             event(),
+            app.execution_coordinator,
         )
         assert approved_outcome == "approval_applied"
         assert "marked complete" in approved

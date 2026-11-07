@@ -330,6 +330,7 @@ export function TaskModal({
   const [estimate, setEstimate] = useState("45");
   const [scheduledDate, setScheduledDate] = useState(localDateString());
   const [commitmentId, setCommitmentId] = useState("");
+  const [executionType, setExecutionType] = useState<"human" | "ai">("human");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -346,6 +347,7 @@ export function TaskModal({
           est_min: Number(estimate),
           scheduled_date: scheduledDate || null,
           commitment_id: commitmentId || null,
+          execution_type: executionType,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -390,6 +392,18 @@ export function TaskModal({
             value={scheduledDate}
             onChange={(event) => setScheduledDate(event.target.value)}
           />
+        </Field>
+        <Field label="Task type">
+          <select
+            className={inputClass}
+            value={executionType}
+            onChange={(event) =>
+              setExecutionType(event.target.value as "human" | "ai")
+            }
+          >
+            <option value="human">👤 Human — physical presence or authority</option>
+            <option value="ai">🧠 AI delegatable — digital knowledge work</option>
+          </select>
         </Field>
         <Field label="Commitment (optional)" full>
           <select

@@ -251,7 +251,7 @@ approving records.
 | `POST` | `/api/dashboard/goals` | Create a year goal (`title`, `year`, `evidence_of_done`) |
 | `GET` | `/api/dashboard/commitments` | Month commitments with linked goal titles |
 | `POST` | `/api/dashboard/commitments` | Create a month commitment, optionally linked to a goal |
-| `POST` | `/api/dashboard/tasks` | Add a task to the current week pool; links a commitment or creates an ad hoc task |
+| `POST` | `/api/dashboard/tasks` | Add a task to the current week pool; `execution_type` is `human` or `ai` |
 | `POST` | `/api/dashboard/delegate/{task_id}` | Start the two-step Execution Sub-Agent flow with optional `instruction`, returning structured output plus execution code |
 | `POST` | `/api/dashboard/executions/{execution_code}/approve` | Owner sign-off that marks the delegated task complete in Postgres |
 
@@ -291,6 +291,10 @@ Delegate response:
   "execution_code": "ZK-9K2M"
 }
 ```
+
+Only `ai` tasks can reach delegation. A `human` task is rejected with
+`409 HUMAN_TASK` and the message "This task requires your physical presence, I
+cannot delegate it."
 
 The sub-agent result is posted to `#ai-workspace` with an appended sign-off
 prompt. The task is **not** completed until:
@@ -417,3 +421,20 @@ The registration response includes `id` and `api_key`. Capture the returned runt
 | `GET` | `/health/ready` | DB/migration/config/Switch readiness | Localhost/private network only; safe summary, no secrets or private owner data |
 
 There are no user-facing HTTP mutation endpoints, webhooks or public APIs in MVP.
+
+
+## Judge sandbox
+
+The backend exposes an isolated sandbox under:
+
+```text
+/sandbox/api/dashboard/*
+```
+
+It is served by the same FastAPI process and uses `SANDBOX_DATABASE_URL`
+(SQLite only). The Vercel frontend selects it automatically when
+`NEXT_PUBLIC_DEMO_MODE=true`. It never reads or writes the owner Neon database.
+
+Discord sandbox routing is enabled when `SANDBOX_SWITCH_ROOM_ID` matches the
+incoming Switch room. The sandbox owner is `@sandbox:judge` and sandbox writes
+never reach the owner scope.

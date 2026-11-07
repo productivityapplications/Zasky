@@ -34,6 +34,8 @@ import type {
   TodayPayload,
 } from "@/lib/types";
 
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("today");
   const [filter, setFilter] = useState<TaskFilter>("all");
@@ -219,11 +221,19 @@ export default function DashboardPage() {
         <NavigationRail tab={tab} onTab={setTab} />
 
         <main className="min-w-0 px-0 pb-24 pt-1 sm:px-1 lg:pb-2">
+          {DEMO_MODE ? (
+            <div className="mb-3 flex items-center gap-2 rounded-full border border-black/10 bg-zest px-4 py-2 text-[11px] font-semibold text-ink shadow-sm">
+              <span aria-hidden="true">🧪</span>
+              You are viewing the interactive Hackathon Demo.
+            </div>
+          ) : null}
           <div className="mb-4 flex items-center justify-between gap-2 md:hidden">
             <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-ink text-xs font-bold text-white shadow-card">
-                Z
-              </span>
+              <img
+                src="/favicon.svg"
+                alt="Zasky"
+                className="h-9 w-9 rounded-2xl shadow-card"
+              />
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted">
                   Owner dashboard
@@ -312,9 +322,37 @@ export default function DashboardPage() {
             </>
           )}
 
-          <footer className="mt-5 flex flex-col justify-between gap-1 border-t border-black/5 pt-3 text-[9px] text-muted/70 sm:flex-row">
-            <span>Zasky · owner-only dashboard</span>
-            <span>Neon Postgres · deterministic planning state</span>
+          <footer className="mt-6 flex flex-col gap-3 border-t border-black/5 pt-4 text-[10px] text-muted/75">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <a
+                href="https://github.com/productivityapplications/Zasky"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-ink/65 transition hover:text-ink"
+              >
+                GitHub
+              </a>
+              <a
+                href="https://github.com/productivityapplications/Zasky/tree/main/docs"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-ink/65 transition hover:text-ink"
+              >
+                Documentation
+              </a>
+              <span className="rounded-full bg-lavender/25 px-2.5 py-1 font-semibold text-ink/60">
+                Made for WeMakeDevs Hackathon
+              </span>
+              <a
+                href="https://github.com/sandbox-quantum/switch"
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-ink/65 transition hover:text-ink"
+              >
+                Powered by Switch
+              </a>
+            </div>
+            <span>Zasky · owner-only dashboard · Neon Postgres · deterministic planning state</span>
           </footer>
         </main>
 

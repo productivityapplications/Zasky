@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, date, datetime, time, timedelta
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -73,6 +74,7 @@ class TaskCreateBody(BaseModel):
     est_min: int = Field(gt=0, le=100000)
     scheduled_date: date | None = None
     commitment_id: str | None = None
+    execution_type: Literal["human", "ai"] = "human"
 
 
 class DelegateBody(BaseModel):
@@ -148,6 +150,7 @@ def _task_payload(
         "scheduled_date": task.scheduled_date.isoformat(),
         "status": task.status,
         "ad_hoc": task.ad_hoc,
+        "execution_type": task.execution_type,
         "resume_note_present": bool(task.resume_note),
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "week_start": week_start.isoformat() if week_start else None,
@@ -156,10 +159,21 @@ def _task_payload(
     }
 
 
-def create_dashboard_app(app: ZaskyApp) -> FastAPI:
-    """Build the public-but-token-gated dashboard API."""
+def create_dashboard_app(app: ZaskyApp, scope: Any | None = None) -> FastAPI:
+    """Build the public-but-token-gated dashboard API.
+
+    ``scope`` selects the owner or isolated sandbox services. The default keeps
+    the existing real-owner behavior for tests and direct calls.
+    """
 
     settings = app.settings
+    if scope is None:
+        scope = SimpleNamespace(
+            db=app.db,
+            domain=app.domain,
+            delegate_from_dashboard=app.delegate_from_dashboard,
+            approve_execution=app.approve_execution,
+        )
     dashboard = FastAPI(
         title="Zasky owner dashboard API",
         docs_url=None,
@@ -254,13 +268,14 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             "RATE_LIMITED": 429,
             "BUDGET_EXCEEDED": 402,
             "MODEL_UNAVAILABLE": 503,
+            "HUMAN_TASK": 409,
         }.get(exc.code, 400)
         raise HTTPException(status_code=status_code, detail=exc.message) from exc
 
     async def approve_record(request: AddCommitmentRequest) -> dict[str, Any]:
         actor_id, room_id = owner_identity()
-        proposal = await app.domain.propose_record(request)
-        resolved = await app.domain.resolve_proposal(
+        proposal = await scope.domain.propose_record(request)
+        resolved = await scope.domain.resolve_proposal(
             action="approve",
             code=str(proposal["proposal"]),
             actor_id=actor_id,
@@ -279,7 +294,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         dependencies=[Depends(require_calendar_access)],
     )
     async def calendar_feed() -> Response:
-        content = await build_calendar_feed(app.db, settings)
+        content = await build_calendar_feed(scope.db, settings)
         return Response(
             content=content,
             media_type="text/calendar; charset=utf-8",
@@ -296,7 +311,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         target = local_date or local_today()
         tz = ZoneInfo(settings.timezone)
         start_utc, end_utc = _day_bounds(target, tz)
-        async with app.db.locked_session() as session:
+        async with scope.db.locked_session() as session:
             plan = await session.scalar(
                 select(DayPlan)
                 .where(
@@ -397,7 +412,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
 
     @dashboard.get("/api/dashboard/goals", dependencies=[Depends(require_token)])
     async def goals() -> dict[str, Any]:
-        async with app.db.locked_session() as session:
+        async with scope.db.locked_session() as session:
             rows = (
                 await session.execute(
                     select(YearGoal).order_by(
@@ -450,7 +465,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         dependencies=[Depends(require_token)],
     )
     async def commitments() -> dict[str, Any]:
-        async with app.db.locked_session() as session:
+        async with scope.db.locked_session() as session:
             rows = (
                 await session.execute(
                     select(MonthCommitment, YearGoal)
@@ -528,11 +543,12 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
     @dashboard.post("/api/dashboard/tasks", dependencies=[Depends(require_token)])
     async def create_task(body: TaskCreateBody) -> dict[str, Any]:
         try:
-            task = await app.domain.add_week_task(
+            task = await scope.domain.add_week_task(
                 title=body.title,
                 est_min=body.est_min,
                 scheduled_date=body.scheduled_date,
                 commitment_id=body.commitment_id,
+                execution_type=body.execution_type,
             )
         except DomainError as exc:
             raise_domain_error(exc)
@@ -547,7 +563,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         if status is not None and status not in allowed:
             raise HTTPException(status_code=400, detail="Unknown task status.")
         tz = ZoneInfo(settings.timezone)
-        async with app.db.locked_session() as session:
+        async with scope.db.locked_session() as session:
             statement = (
                 select(WeekTask, WeekPlacement, MonthCommitment)
                 .join(WeekPlacement, WeekTask.placement_id == WeekPlacement.id)
@@ -640,7 +656,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         body: CompleteTaskBody | None = None,
     ) -> dict[str, Any]:
         try:
-            result = await app.domain.complete_task(
+            result = await scope.domain.complete_task(
                 CompleteTaskRequest(
                     task_id=task_id,
                     actual_min=body.actual_min if body else None,
@@ -665,7 +681,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         body: DelegateBody | None = None,
     ) -> dict[str, Any]:
         try:
-            result = await app.delegate_from_dashboard(
+            result = await scope.delegate_from_dashboard(
                 task_id,
                 body.instruction if body else None,
             )
@@ -677,6 +693,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                 "BUDGET_EXCEEDED": 402,
                 "MODEL_UNAVAILABLE": 503,
                 "CONFLICT": 409,
+                "HUMAN_TASK": 409,
             }.get(exc.code, 502)
             raise HTTPException(
                 status_code=status_code, detail=exc.message
@@ -689,7 +706,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
     )
     async def approve_execution(execution_code: str) -> dict[str, Any]:
         try:
-            result = await app.approve_execution(execution_code)
+            result = await scope.approve_execution(execution_code)
         except DomainError as exc:
             raise_domain_error(exc)
         return {"ok": True, **result}
@@ -733,7 +750,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         limit: int = Query(default=20, ge=1, le=100),
     ) -> dict[str, Any]:
         tz = ZoneInfo(settings.timezone)
-        async with app.db.locked_session() as session:
+        async with scope.db.locked_session() as session:
             plans = (
                 await session.execute(
                     select(DayPlan)

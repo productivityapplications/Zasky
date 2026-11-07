@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "Zasky · Owner Dashboard",
   description:
     "A private owner dashboard for today's plan, the task pool and reconciliation history.",
+  icons: {
+    icon: "/favicon.svg",
+  },
   robots: {
     index: false,
     follow: false,

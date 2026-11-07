@@ -771,3 +771,32 @@ async def test_dashboard_ad_hoc_task_uses_week_pool(domain_env) -> None:
     assert task["status"] == "active"
     detail = await service.task_detail(task["id"])
     assert detail["commitment_title"] is None
+
+
+@pytest.mark.asyncio
+async def test_task_execution_type_defaults_human_and_accepts_ai(domain_env) -> None:
+    _db, service, _settings = domain_env
+    human = await service.add_week_task(
+        title="Call the dentist",
+        est_min=15,
+        week_start=date(2026, 11, 2),
+        scheduled_date=date(2026, 11, 6),
+    )
+    ai = await service.add_week_task(
+        title="Draft a launch email",
+        est_min=20,
+        week_start=date(2026, 11, 2),
+        scheduled_date=date(2026, 11, 6),
+        execution_type="ai",
+    )
+    assert human["execution_type"] == "human"
+    assert ai["execution_type"] == "ai"
+    with pytest.raises(DomainError) as excinfo:
+        await service.add_week_task(
+            title="Invalid type",
+            est_min=10,
+            week_start=date(2026, 11, 2),
+            scheduled_date=date(2026, 11, 6),
+            execution_type="robot",
+        )
+    assert excinfo.value.code == "INVALID_INPUT"

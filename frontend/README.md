@@ -68,6 +68,7 @@ Add these for **Production**, **Preview** and **Development**:
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://YOUR_VPS_IP:8100` | Public value, but only used server-side |
 | `ZASKY_DASHBOARD_TOKEN` | the `DASHBOARD_API_KEY` value from `/root/Zasky-secrets/zasky.env` | **Server-only secret** |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` for the public judge sandbox, `false` for owner mode | Public build-time flag |
 
 Optional server-side override:
 

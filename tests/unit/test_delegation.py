@@ -116,3 +116,32 @@ async def test_delegation_proposal_rejects_completed_task(
     finally:
         await db.close(close_connections=False)
         await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_human_task_cannot_be_delegated(tmp_path, settings: Settings) -> None:
+    from sqlalchemy import select
+
+    from zasky.storage.models import WeekTask
+
+    db = Database(f"sqlite+aiosqlite:///{tmp_path / 'delegation-human.db'}")
+    await db.init()
+    delegations = DelegationService(db, settings)
+    try:
+        await seed_plan(
+            db, start_utc=datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
+        )
+        async with db.locked_session() as session:
+            task = await session.scalar(
+                select(WeekTask).where(WeekTask.id == "task-1")
+            )
+            assert task is not None
+            task.execution_type = "human"
+            await session.commit()
+        with pytest.raises(DomainError) as excinfo:
+            await delegations.propose("task-1")
+        assert excinfo.value.code == "HUMAN_TASK"
+        assert "physical presence" in excinfo.value.message
+    finally:
+        await db.close(close_connections=False)
+        await asyncio.sleep(0.2)

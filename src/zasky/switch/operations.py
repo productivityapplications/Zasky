@@ -58,6 +58,17 @@ class SwitchOperations:
             return body
         raise SwitchOperationsError(f"{operation} returned an unexpected payload")
 
+    async def list_rooms(self) -> list[dict[str, Any]]:
+        response = await self._post_operation("list_rooms", {})
+        if isinstance(response, dict) and isinstance(response.get("result"), list):
+            return [item for item in response["result"] if isinstance(item, dict)]
+        if isinstance(response, list):
+            return [item for item in response if isinstance(item, dict)]
+        return []
+
+    async def get_room_detail(self, room_id: str) -> dict[str, Any]:
+        return await self._post_operation("get_room_detail", {"room_id": room_id})
+
     async def connect_to_room(self, room_id: str) -> dict[str, Any]:
         return await self._post_operation(
             "connect_to_room",

@@ -115,6 +115,17 @@ The feed contains active fixed events and approved day-plan tasks. Each task has
 a display alarm `CALENDAR_ALARM_MINUTES` before its start (default 5). The
 dashboard bearer token also works for this route.
 
+## Judge sandbox
+
+Set `SANDBOX_DATABASE_URL=sqlite+aiosqlite:////app/data/sandbox.db` to create an
+isolated SQLite sandbox. The dashboard API mounts it under
+`/sandbox/api/dashboard`; Vercel selects it when `NEXT_PUBLIC_DEMO_MODE=true`.
+The sandbox owner is `@sandbox:judge` and never touches the Neon owner database.
+
+To route `#judges-sandbox` chat, create/attach the Switch room, find its room ID
+with `scripts/find_switch_room.py`, and set `SANDBOX_SWITCH_ROOM_ID`. Only that
+exact room accepts non-owner senders.
+
 ## Discord channel expansion
 
 The one-off `scripts/setup_discord.py` creates the Zasky HQ category and its five

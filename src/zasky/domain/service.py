@@ -720,6 +720,7 @@ class DomainService:
                         "est_min": item.est_min,
                         "scheduled_date": chosen_date.isoformat(),
                         "ad_hoc": item.ad_hoc,
+                        "execution_type": item.execution_type,
                     }
                 )
 
@@ -792,6 +793,7 @@ class DomainService:
                         scheduled_date=scheduled,
                         status="active",
                         ad_hoc=task["ad_hoc"],
+                        execution_type=task.get("execution_type", "human"),
                     )
                 )
         await self._audit(
@@ -1061,6 +1063,7 @@ class DomainService:
         week_start: date | None = None,
         scheduled_date: date | None = None,
         commitment_id: str | None = None,
+        execution_type: str = "human",
     ) -> dict[str, Any]:
         """Add one owner-authored task to the current week pool.
 
@@ -1076,6 +1079,10 @@ class DomainService:
             raise DomainError("INVALID_INPUT", "Task titles are limited to 200 characters.")
         if est_min <= 0:
             raise DomainError("INVALID_INPUT", "A task estimate must be positive.")
+        if execution_type not in {"human", "ai"}:
+            raise DomainError(
+                "INVALID_INPUT", "execution_type must be 'human' or 'ai'."
+            )
 
         async with self._db.locked_session() as session:
             config = await self._config(session)
@@ -1221,6 +1228,7 @@ class DomainService:
                 scheduled_date=chosen_date,
                 status="active",
                 ad_hoc=commitment_id is None,
+                execution_type=execution_type,
             )
             session.add(task)
             await self._bump(session, f"week:{selected_week.isoformat()}")
@@ -1241,6 +1249,7 @@ class DomainService:
                 "scheduled_date": task.scheduled_date.isoformat(),
                 "status": task.status,
                 "ad_hoc": task.ad_hoc,
+                "execution_type": task.execution_type,
                 "placement_id": placement.id,
                 "week_start": selected_week.isoformat(),
             }
@@ -1259,6 +1268,7 @@ class DomainService:
                 "scheduled_date": task.scheduled_date.isoformat(),
                 "status": task.status,
                 "ad_hoc": task.ad_hoc,
+                "execution_type": task.execution_type,
                 "resume_note": task.resume_note,
                 "commitment_id": (
                     commitment.id if commitment is not None else None
@@ -1739,6 +1749,7 @@ class DomainService:
                             "est_min": task.est_min,
                             "scheduled_date": task.scheduled_date.isoformat(),
                             "status": task.status,
+                            "execution_type": task.execution_type,
                         }
                         for task, _commitment in pool
                     ],
@@ -1865,6 +1876,7 @@ class DomainService:
                         "est_min": task.est_min,
                         "scheduled_date": task.scheduled_date.isoformat(),
                         "status": task.status,
+                        "execution_type": task.execution_type,
                         "resume_note_present": bool(task.resume_note),
                     },
                 }

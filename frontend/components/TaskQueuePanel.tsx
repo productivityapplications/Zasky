@@ -63,6 +63,17 @@ function TaskCard({
           completed || cancelled ? "text-white/40" : "text-black/55",
         )}
       >
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em]",
+            task.execution_type === "ai"
+              ? "bg-white/55 text-ink"
+              : "bg-black/10 text-ink/60",
+            (completed || cancelled) && "bg-white/10 text-white/55",
+          )}
+        >
+          {task.execution_type === "ai" ? "🧠 AI Delegatable" : "👤 Human"}
+        </span>
         {task.commitment_title ? <span>{task.commitment_title}</span> : null}
         {task.ad_hoc ? <span>ad hoc</span> : null}
         {task.resume_note_present ? <span>parked note</span> : null}
@@ -98,7 +109,7 @@ function TaskCard({
             <CalendarDays size={12} />
           </a>
         ) : null}
-        {!completed && !cancelled ? (
+        {!completed && !cancelled && task.execution_type === "ai" ? (
           <button
             type="button"
             onClick={() => onDelegate(task)}

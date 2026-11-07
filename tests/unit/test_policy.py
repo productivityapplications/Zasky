@@ -69,3 +69,19 @@ def test_oversized_body_is_rejected(settings: Settings) -> None:
     decision = authorize_message(make_event(body="hello world"), small)
     assert decision.allowed is False
     assert decision.reason == "message_too_long"
+
+
+def test_sandbox_room_allows_judges_but_stays_isolated(settings: Settings) -> None:
+    configured = settings.model_copy(
+        update={"sandbox_switch_room_id": "sandbox-room-1"}
+    )
+    decision = authorize_message(
+        make_event(room_id="sandbox-room-1", sender=STRANGER_ID),
+        configured,
+    )
+    assert decision.allowed is True
+    assert decision.reason == "ok"
+    wrong_sender_main = authorize_message(
+        make_event(sender=STRANGER_ID), configured
+    )
+    assert wrong_sender_main.reason == "sender_not_owner"

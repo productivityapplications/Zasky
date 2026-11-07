@@ -79,7 +79,17 @@ function PlanTaskCard({
         </div>
         <CalendarLink url={item.google_calendar_url} title={item.title} />
       </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[9px] font-medium text-black/55">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] font-medium text-black/55">
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.08em]",
+            item.execution_type === "ai"
+              ? "bg-white/55 text-ink"
+              : "bg-black/10 text-ink/60",
+          )}
+        >
+          {item.execution_type === "ai" ? "🧠 AI" : "👤 Human"}
+        </span>
         <Clock size={11} />
         {item.planned_start_display ?? "—"} –{" "}
         {item.planned_end_display ?? "—"}

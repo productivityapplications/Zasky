@@ -76,6 +76,7 @@ class PlaceWeekTask(StrictModel):
     est_min: int = Field(gt=0)
     scheduled_date: date | None = None
     ad_hoc: bool = False
+    execution_type: Literal["human", "ai"] = "human"
 
 
 class PlaceWeekRequest(StrictModel):

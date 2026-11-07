@@ -63,6 +63,29 @@ Routing after setup:
 The bot token stays in the protected env file. The model cannot post arbitrary
 Discord content and `@everyone` mentions are disabled on notification messages.
 
+## Task types: human vs AI
+
+Every task is either:
+
+- **👤 Human** — physical presence or personal authority (call the dentist, buy
+  groceries, sign a document). Zasky will never offer to delegate it.
+- **🧠 AI Delegatable** — digital knowledge work (draft an email, write a
+  script, outline a plan). Only these tasks can enter the delegation workflow.
+
+Human tasks are protected in the domain service, chat handler, delegation
+service and dashboard. A human task rejected from delegation returns:
+"This task requires your physical presence, I cannot delegate it."
+
+## Judge sandbox
+
+The judge sandbox is an isolated SQLite database. It is selected by
+`SANDBOX_DATABASE_URL` and the dashboard demo mode, and never touches the owner
+Neon database. The sandbox owner is `@sandbox:judge`.
+
+Set `SANDBOX_SWITCH_ROOM_ID` to the Switch room mapped to `#judges-sandbox` to
+route judge chat there. Messages from that exact room may come from any sender;
+all other rooms keep the strict owner-only gate.
+
 ## Owner dashboard (2026-11-07)
 
 Open the Vercel dashboard URL to see:

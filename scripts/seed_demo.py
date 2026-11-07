@@ -172,36 +172,42 @@ async def seed(settings, database_url: str | None, reset: bool) -> None:
                 45,
                 date(2026, 11, 4),
                 "Produce the Zasky demo package",
+                "ai",
             ),
             (
                 "Record the demo narration",
                 45,
                 date(2026, 11, 6),
                 "Produce the Zasky demo package",
+                "human",
             ),
             (
                 "Capture the recovery transcript",
                 60,
                 date(2026, 11, 6),
                 "Produce the Zasky demo package",
+                "human",
             ),
             (
                 "Review the release checklist",
                 30,
                 date(2026, 11, 5),
                 "Finish the release checklist",
+                "ai",
             ),
             (
                 "Check backup restore evidence",
                 30,
                 date(2026, 11, 3),
                 "Finish the release checklist",
+                "human",
             ),
             (
                 "Draft the operator handoff",
                 60,
                 date(2026, 11, 5),
                 "Write the operator handoff",
+                "ai",
             ),
         ]
         result = await service.propose_week(
@@ -213,8 +219,9 @@ async def seed(settings, database_url: str | None, reset: bool) -> None:
                         task_title=title,
                         est_min=estimate,
                         scheduled_date=scheduled,
+                        execution_type=execution_type,
                     )
-                    for title, estimate, scheduled, commitment_title in week_tasks
+                    for title, estimate, scheduled, commitment_title, execution_type in week_tasks
                 ],
             )
         )

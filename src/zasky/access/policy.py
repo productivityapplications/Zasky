@@ -24,11 +24,13 @@ def authorize_message(event: MessageEvent, settings: Settings) -> AccessDecision
     data = event.data
     payload = data.payload
 
-    if data.room_id != settings.switch_room_id:
+    sandbox_room = settings.sandbox_switch_room_id
+    is_sandbox = bool(sandbox_room and data.room_id == sandbox_room)
+    if data.room_id != settings.switch_room_id and not is_sandbox:
         return AccessDecision(False, "room_not_allowed")
     if not payload.addressed:
         return AccessDecision(False, "not_addressed")
-    if payload.sender != settings.owner_switch_participant_id:
+    if not is_sandbox and payload.sender != settings.owner_switch_participant_id:
         return AccessDecision(False, "sender_not_owner")
 
     body = payload.body

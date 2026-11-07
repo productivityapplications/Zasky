@@ -105,12 +105,14 @@ async def seed(settings: Settings) -> None:
                                 est_min=30,
                                 scheduled_date=today,
                                 ad_hoc=True,
+                                execution_type="ai",
                             ),
                             PlaceWeekTask(
                                 task_title="Verify the Vercel proxy",
                                 est_min=30,
                                 scheduled_date=today,
                                 ad_hoc=True,
+                                execution_type="ai",
                             ),
                         ],
                     )

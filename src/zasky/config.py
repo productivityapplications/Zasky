@@ -131,6 +131,14 @@ class Settings(BaseSettings):
     calendar_feed_token: SecretStr | None = None
     calendar_alarm_minutes: int = Field(default=5, ge=0, le=120)
 
+    # Judge sandbox. It must be an isolated SQLite database, never the owner
+    # Neon database. The Switch room is optional; dashboard demo mode works
+    # without it.
+    sandbox_database_url: str | None = None
+    sandbox_switch_room_id: str | None = None
+    sandbox_discord_channel_id: str | None = None
+    sandbox_owner_switch_participant_id: str = "@sandbox:judge"
+
     # Owner dashboard API (Vercel). The token is mandatory; the public API is
     # never unauthenticated even though CORS is permissive for the demo.
     dashboard_bind_host: str = "0.0.0.0"
@@ -235,6 +243,20 @@ class Settings(BaseSettings):
             raise ValueError("must not include a query or fragment")
         return candidate
 
+    @field_validator("sandbox_database_url")
+    @classmethod
+    def _sandbox_sqlite_only(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not cleaned.startswith("sqlite+aiosqlite:///"):
+            raise ValueError(
+                "sandbox_database_url must be an isolated SQLite database"
+            )
+        return cleaned
+
     @field_validator("discord_api_base_url")
     @classmethod
     def _valid_discord_api_base(cls, value: str) -> str:
@@ -272,6 +294,10 @@ class Settings(BaseSettings):
             self.openai_api_key
             and self.openai_api_key.get_secret_value().strip()
         )
+
+    @property
+    def sandbox_enabled(self) -> bool:
+        return bool(self.sandbox_database_url)
 
     @property
     def discord_notifications_configured(self) -> bool:

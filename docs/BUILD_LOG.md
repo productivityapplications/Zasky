@@ -1,5 +1,18 @@
 # Zasky Build Log
 
+## 2026-11-07 — Task typing, judge sandbox and final branding
+
+- Added `week_tasks.execution_type` with migration `5234927536a9`; human tasks
+  can never enter delegation, enforced in domain, chat, coordinator and API.
+- Added the isolated SQLite judge sandbox, sandbox dashboard mount, optional
+  Switch sandbox room routing, demo-mode Vercel proxy and banner.
+- Added slanted Z SVG favicon, rail logo replacement, removed the profile icon,
+  and added GitHub/Docs/WeMakeDevs/Switch footer links.
+- Replaced README with the complete architecture, phases, user guide and judge
+  instructions.
+- Tests: **163 passed**; `ruff` clean; `mypy src` clean; demo and normal
+  `npm run build` clean.
+
 ## 2026-11-07 — Execution context assembly
 
 - Added `DelegationContext` assembly through `DomainService.task_detail`: task,
@@ -10,7 +23,7 @@
 - `delegate ZK-XXXX [instructions]` now parses and forwards the optional suffix.
 - Dashboard Confirm Delegation modal has an optional Additional Context /
   Instructions textarea passed to the delegate API.
-- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 
 ## 2026-11-07 — Tailwind redesign and human-in-the-loop delegation
 
@@ -29,7 +42,7 @@
   Markdown sections.
 - Updated the dashboard delegate modal to Confirm Delegation → structured
   output → Approve Execution & Complete Task.
-- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - Neon schema migrated to `526c14430d14`.
 
 ## 2026-11-07 — Calendar feed and Google Calendar links

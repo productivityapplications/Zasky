@@ -8,6 +8,7 @@ export type DashboardTask = {
   actual_min: number | null;
   scheduled_date: string;
   status: "active" | "parked" | "completed" | "cancelled";
+  execution_type: "human" | "ai";
   ad_hoc: boolean;
   resume_note_present: boolean;
   completed_at: string | null;

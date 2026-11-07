@@ -47,6 +47,10 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `DISCORD_API_BASE_URL` | No | Discord REST base URL | Default `https://discord.com/api/v10`; server-only |
 | `CALENDAR_FEED_TOKEN` | Optional | Read-only token for direct `.ics` subscription URLs | Secret; query `?token=`; dashboard bearer auth also works |
 | `CALENDAR_ALARM_MINUTES` | No | VALARM lead time for day-plan tasks | Default `5`; 0–120 |
+| `SANDBOX_DATABASE_URL` | Optional | Isolated judge sandbox database | Must be `sqlite+aiosqlite:///...`; never the owner Neon URL |
+| `SANDBOX_OWNER_SWITCH_PARTICIPANT_ID` | Optional | Dummy sandbox owner | Default `@sandbox:judge` |
+| `SANDBOX_SWITCH_ROOM_ID` | Optional | Switch room mapped to `#judges-sandbox` | Sandbox chat routing; any sender allowed only in this room |
+| `SANDBOX_DISCORD_CHANNEL_ID` | Optional | Discord channel ID for operator mapping | Documentation/mapping aid |
 | `DISCORD_DAILY_BRIEFINGS_CHANNEL_ID` | For Daily Briefing routing | Destination for approved `plan_day` briefings | Discord snowflake; `#daily-briefings` |
 | `DISCORD_RECONCILE_ALERTS_CHANNEL_ID` | For recovery routing | Destination for approved `reconcile` summaries | Discord snowflake; `#reconcile-alerts` |
 | `DISCORD_AI_WORKSPACE_CHANNEL_ID` | For execution results | Destination for Execution Sub-Agent results | Discord snowflake; `#ai-workspace` |
@@ -72,6 +76,10 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
   The bot needs View Channels and Manage Channels for setup, plus Send Messages
   and Embed Links in the three notification channels.
 - Keep encryption keys for backups separate from the backup files.
+- `SANDBOX_DATABASE_URL` must point at isolated SQLite. The owner Neon database is
+  rejected by settings validation, so a judge cannot write owner data.
+- `NEXT_PUBLIC_DEMO_MODE=true` is a Vercel build-time variable. It selects the
+  sandbox proxy path and shows the demo banner; it never exposes a secret.
 - Redact environment dumps, exception traces and CI output.
 
 ## Cost controls

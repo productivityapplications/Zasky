@@ -48,6 +48,7 @@ async def seed_plan(db: Database, *, start_utc: datetime) -> tuple[str, str]:
             scheduled_date=date(2026, 11, 6),
             status="active",
             ad_hoc=True,
+            execution_type="ai",
         )
         plan = DayPlan(
             id="plan-1",

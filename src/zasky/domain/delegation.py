@@ -151,6 +151,11 @@ class DelegationService:
                     "CONFLICT",
                     "A completed or cancelled task cannot be delegated.",
                 )
+            if task.execution_type != "ai":
+                raise DomainError(
+                    "HUMAN_TASK",
+                    "This task requires your physical presence, I cannot delegate it.",
+                )
             existing = await session.scalar(
                 select(DelegationProposal).where(
                     DelegationProposal.task_id == task_id,
@@ -230,7 +235,11 @@ class DelegationService:
         if len(scored) > 1 and scored[0][0] == scored[1][0]:
             return None
         task = scored[0][1]
-        return {"id": task.id, "title": task.title}
+        return {
+            "id": task.id,
+            "title": task.title,
+            "execution_type": task.execution_type,
+        }
 
     async def start(
         self, code: str, *, actor_id: str
@@ -292,6 +301,11 @@ class DelegationService:
                 raise DomainError(
                     "CONFLICT",
                     "A completed or cancelled task cannot be delegated.",
+                )
+            if task.execution_type != "ai":
+                raise DomainError(
+                    "HUMAN_TASK",
+                    "This task requires your physical presence, I cannot delegate it.",
                 )
             proposal.status = "running"
             proposal.execution_code = await self._new_code(session)
