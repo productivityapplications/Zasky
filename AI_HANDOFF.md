@@ -47,8 +47,8 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | Pending commit of the two-way dashboard release |
-| Current Git commit | `c72e666` |
+| Deployed commit | `a3b375f` (two-way dashboard + Execution Sub-Agent) |
+| Current Git commit | `a3b375f` plus docs checkpoint |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 145 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
@@ -278,6 +278,9 @@
 - Live reads through the Vercel proxy shape returned 3 goals, 3 commitments and
   8 tasks from Neon. Delegation of a missing task returned `404` without
   invoking the model.
+- The first dashboard request after a forced container recreation was slow while
+  Neon warmed; a normal restart restored 1–2 second reads. Health stayed green
+  and no model or planning action occurred during the warm-up.
 - Every dashboard write targets the same Neon database Zasky reads in Discord.
 
 ## Known issues and blockers
