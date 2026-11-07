@@ -1,5 +1,23 @@
 # Zasky Build Log
 
+## 2026-11-07 — Two-way dashboard and Execution Sub-Agent
+
+- Added dashboard write endpoints for year goals, month commitments, week-pool
+  tasks and task delegation. Goals/commitments use `propose_record` plus the
+  deterministic approval path; tasks use the new `DomainService.add_week_task`
+  so an existing commitment placement is appended rather than duplicated.
+- Added `GET /api/dashboard/goals` and `GET /api/dashboard/commitments` for the
+  modal selectors.
+- Added the bounded `ExecutionSubAgent`: one tool-free LLM call, existing cost
+  guard, no planning mutation, output returned to the dashboard and posted to
+  `#ai-workspace` when configured.
+- Added Next.js modal forms for New Goal, New Commitment and Add Task; added the
+  task-pool delegate button with loading and output states.
+- Extended the Next.js proxy allowlist and timeout for delegation.
+- Tests: **145 passed**; `ruff check .` clean; `mypy src` clean; `npm run build`
+  clean.
+- All writes target the same Neon Postgres database that Zasky reads in Discord.
+
 ## 2026-11-07 — Discord routing activated
 
 - Operator ran the reviewed `scripts/setup_discord.py`; the `Zasky HQ` category

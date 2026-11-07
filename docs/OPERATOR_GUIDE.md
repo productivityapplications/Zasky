@@ -73,6 +73,16 @@ Open the Vercel dashboard URL to see:
   complete.
 - **Reconciliation History** — approved recovery plans with kept/moved items.
 
+The dashboard also has **New Goal**, **New Commitment** and **Add Task** actions
+for building the planning cascade directly in the UI. Existing goals and
+commitments appear in the modal selectors. Created tasks enter the current week
+pool immediately and are readable by Zasky in Discord.
+
+On incomplete tasks, **⚡ Delegate to AI** runs the bounded Execution Sub-Agent.
+The modal shows a loading state, then the draft or checklist output. The task
+itself is not changed, and the result is also posted to `#ai-workspace` when
+configured.
+
 The dashboard writes to the same Neon Postgres database as chat. A checkbox is an
 explicit owner completion, not a model action. The dashboard token stays on the
 Vercel server. Do not share the Vercel URL publicly or put the token in a browser

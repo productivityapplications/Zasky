@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const API_BASE = (
   process.env.ZASKY_API_URL ??
@@ -10,7 +11,14 @@ const API_BASE = (
 ).replace(/\/+$/, "");
 const DASHBOARD_TOKEN = process.env.ZASKY_DASHBOARD_TOKEN ?? "";
 
-const ALLOWED_ROOTS = new Set(["today", "tasks", "reconciliations"]);
+const ALLOWED_ROOTS = new Set([
+  "today",
+  "tasks",
+  "reconciliations",
+  "goals",
+  "commitments",
+  "delegate",
+]);
 const SAFE_SEGMENT = /^[A-Za-z0-9-]+$/;
 
 function jsonError(detail: string, status: number): NextResponse {
@@ -53,7 +61,10 @@ async function forward(
       },
       body: request.method === "POST" ? await request.text() : undefined,
       cache: "no-store",
-      signal: AbortSignal.timeout(20000),
+      // Delegation can wait on the model; normal dashboard reads stay quick.
+      signal: AbortSignal.timeout(
+        path[0] === "delegate" ? 55_000 : 20_000,
+      ),
     });
   } catch (error) {
     const message =

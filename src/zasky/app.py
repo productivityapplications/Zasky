@@ -13,6 +13,7 @@ from sqlalchemy.engine import make_url
 from zasky.access.approvals import ApprovalCommand, is_conversational_approval
 from zasky.agent.briefing import BriefingBuilder
 from zasky.agent.context import ContextBuilder
+from zasky.agent.execution import ExecutionSubAgent, ExecutionSubAgentError
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
 from zasky.domain.errors import DomainError
@@ -49,15 +50,21 @@ class ZaskyApp:
         self.alarm_scheduler = AlarmScheduler(self.db, self.ops, settings)
         self.llm: OpenRouterClient | None = None
         self.orchestrator: AgentOrchestrator | None = None
+        self.execution: ExecutionSubAgent | None = None
+        self.cost_guard: CostGuard | None = None
         if settings.llm_enabled:
             self.llm = OpenRouterClient(settings)
+            self.cost_guard = CostGuard(self.db, settings)
             self.orchestrator = AgentOrchestrator(
                 settings,
                 self.domain,
                 self.llm,
                 ContextBuilder(self.db, settings),
-                CostGuard(self.db, settings),
+                self.cost_guard,
                 history_provider=self._recent_room_history,
+            )
+            self.execution = ExecutionSubAgent(
+                settings, self.llm, self.cost_guard
             )
         self.switch = SwitchClient(
             settings,
@@ -318,6 +325,49 @@ class ZaskyApp:
             body=body,
             task_id=task_id,
         )
+
+    async def delegate_task(
+        self,
+        task_id: str,
+        instruction: str | None = None,
+    ) -> dict[str, object]:
+        """Run the bounded Execution Sub-Agent for one owner-selected task."""
+        if self.execution is None:
+            raise ExecutionSubAgentError(
+                "MODEL_UNAVAILABLE",
+                "The execution sub-agent needs a configured model.",
+            )
+        task = await self.domain.task_detail(task_id)
+        if task["status"] in {"completed", "cancelled"}:
+            raise ExecutionSubAgentError(
+                "CONFLICT",
+                "A completed or cancelled task cannot be delegated.",
+            )
+        result = await self.execution.run(task=task, instruction=instruction)
+        delivered = False
+        try:
+            delivered = await self.publish_execution_result(
+                title=str(task["title"]),
+                body=str(result["output"]),
+                task_id=task_id,
+            )
+        except DiscordNotificationError as exc:
+            logger.error(
+                "Execution result channel delivery failed",
+                extra={
+                    "component": "discord",
+                    "error_code": exc.code,
+                },
+            )
+        return {
+            "task_id": task_id,
+            "title": task["title"],
+            "output": result["output"],
+            "model": result["model"],
+            "prompt_tokens": result["prompt_tokens"],
+            "completion_tokens": result["completion_tokens"],
+            "discord_delivered": delivered,
+        }
 
     async def _handle_message(self, event: MessageEvent) -> str:
         if self.orchestrator is None:

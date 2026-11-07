@@ -2,7 +2,10 @@
 
 A private, dark-mode owner dashboard for the Zasky planning agent. It reads
 today's approved MUST/SHOULD plan, the full task pool and reconciliation history
-from the VPS dashboard API, and writes task completion back to Postgres.
+from the VPS dashboard API. From the UI the owner can create year goals, month
+commitments and week-pool tasks, complete tasks, and run the bounded Execution
+Sub-Agent against a task. All writes go to the same Neon Postgres database used
+by Discord.
 
 ## Architecture
 
@@ -111,6 +114,14 @@ curl -fsS \
 ```
 
 Expected: JSON with `date`, `has_plan`, `must`, `should` and `fixed_events`.
+
+## Delegation duration
+
+The `/api/dashboard/delegate/{task_id}` route keeps the browser request open
+while the sub-agent drafts. The Next.js proxy waits up to 55 seconds and sets
+`maxDuration = 60`. If the Vercel plan caps functions below that, the route will
+time out before the model returns; raise the function limit or lower the
+execution output budget.
 
 ## Security notes
 

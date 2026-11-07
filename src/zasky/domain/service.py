@@ -1051,6 +1051,218 @@ class DomainService:
             "day_plan_id": plan.id if plan else None,
         }
 
+    # --------------------------------------------------- dashboard write helpers
+
+    async def add_week_task(
+        self,
+        *,
+        title: str,
+        est_min: int,
+        week_start: date | None = None,
+        scheduled_date: date | None = None,
+        commitment_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Add one owner-authored task to the current week pool.
+
+        The dashboard is an explicit owner surface, so this applies immediately
+        rather than creating a proposal. It reuses the same capacity and
+        placement rules as the weekly planner and appends to an existing
+        placement when the selected commitment already has one.
+        """
+        cleaned_title = title.strip()
+        if not cleaned_title:
+            raise DomainError("INVALID_INPUT", "A task needs a title.")
+        if len(cleaned_title) > 200:
+            raise DomainError("INVALID_INPUT", "Task titles are limited to 200 characters.")
+        if est_min <= 0:
+            raise DomainError("INVALID_INPUT", "A task estimate must be positive.")
+
+        async with self._db.locked_session() as session:
+            config = await self._config(session)
+            today = datetime.now(_UTC).astimezone(ZoneInfo(config.timezone)).date()
+            selected_week = week_start or week_start_for(
+                today, config.week_start_weekday
+            )
+            normalized_week = week_start_for(
+                selected_week, config.week_start_weekday
+            )
+            if normalized_week != selected_week:
+                raise DomainError(
+                    "INVALID_INPUT",
+                    f"That date is not the configured week start "
+                    f"({config.week_start_weekday}).",
+                )
+            fixed_events = await self._fixed_events(
+                session, selected_week, selected_week + timedelta(days=6)
+            )
+            week = week_capacity(selected_week, config, fixed_events)
+            existing = await self._week_tasks(session, selected_week)
+            existing_work = sum(
+                task.est_min
+                for task, _commitment in existing
+                if task.status in {"active", "parked"}
+            )
+            if existing_work + est_min > week.budget_min:
+                raise DomainError(
+                    "CAPACITY_EXCEEDED",
+                    f"The week budget is {week.budget_min} min; adding this "
+                    f"task would use {existing_work + est_min} min.",
+                )
+
+            chosen_date = scheduled_date
+            if chosen_date is not None:
+                if not (
+                    selected_week
+                    <= chosen_date
+                    <= selected_week + timedelta(days=6)
+                ):
+                    raise DomainError(
+                        "INVALID_INPUT",
+                        "A task date must fall inside the selected week.",
+                    )
+                day_events = await self._fixed_events(
+                    session, chosen_date, chosen_date
+                )
+                budget = daily_capacity(
+                    chosen_date, config, day_events
+                ).budget_min
+                load = sum(
+                    task.est_min
+                    for task, _commitment in existing
+                    if task.status in {"active", "parked"}
+                    and task.scheduled_date == chosen_date
+                )
+                if load + est_min > budget:
+                    raise DomainError(
+                        "CAPACITY_EXCEEDED",
+                        f"That date has {max(0, budget - load)} planning "
+                        f"minutes left; the task needs {est_min}.",
+                    )
+            else:
+                candidates: list[tuple[int, date]] = []
+                for offset in range(7):
+                    candidate = selected_week + timedelta(days=offset)
+                    day_events = await self._fixed_events(
+                        session, candidate, candidate
+                    )
+                    budget = daily_capacity(
+                        candidate, config, day_events
+                    ).budget_min
+                    load = sum(
+                        task.est_min
+                        for task, _commitment in existing
+                        if task.status in {"active", "parked"}
+                        and task.scheduled_date == candidate
+                    )
+                    if load + est_min <= budget:
+                        candidates.append((load, candidate))
+                if not candidates:
+                    raise DomainError(
+                        "CAPACITY_EXCEEDED",
+                        "No day in that week has room for this task.",
+                    )
+                chosen_date = min(candidates)[1]
+
+            placement: WeekPlacement | None
+            if commitment_id is not None:
+                commitment = await session.get(MonthCommitment, commitment_id)
+                if commitment is None or commitment.status != "active":
+                    raise DomainError(
+                        "INVALID_INPUT",
+                        "The linked commitment must exist and be active.",
+                    )
+                placement = await session.scalar(
+                    select(WeekPlacement).where(
+                        WeekPlacement.commitment_id == commitment_id,
+                        WeekPlacement.week_start == selected_week,
+                        WeekPlacement.status == "active",
+                    )
+                )
+                if placement is None:
+                    placement = WeekPlacement(
+                        id=str(uuid.uuid4()),
+                        commitment_id=commitment_id,
+                        source_type="commitment",
+                        week_start=selected_week,
+                        status="active",
+                        revision=1,
+                    )
+                    session.add(placement)
+                    await session.flush()
+            else:
+                placement = await session.scalar(
+                    select(WeekPlacement)
+                    .where(
+                        WeekPlacement.commitment_id.is_(None),
+                        WeekPlacement.source_type == "ad_hoc",
+                        WeekPlacement.week_start == selected_week,
+                        WeekPlacement.status == "active",
+                    )
+                    .order_by(WeekPlacement.created_at)
+                    .limit(1)
+                )
+                if placement is None:
+                    placement = WeekPlacement(
+                        id=str(uuid.uuid4()),
+                        commitment_id=None,
+                        source_type="ad_hoc",
+                        week_start=selected_week,
+                        status="active",
+                        revision=1,
+                    )
+                    session.add(placement)
+                    await session.flush()
+
+            task = WeekTask(
+                id=str(uuid.uuid4()),
+                placement_id=placement.id,
+                title=cleaned_title,
+                est_min=est_min,
+                scheduled_date=chosen_date,
+                status="active",
+                ad_hoc=commitment_id is None,
+            )
+            session.add(task)
+            await self._bump(session, f"week:{selected_week.isoformat()}")
+            await self._bump(session, f"day:{chosen_date.isoformat()}")
+            await self._audit(
+                session,
+                action="task_added_from_dashboard",
+                entity_type="week_task",
+                entity_id=task.id,
+                summary="task added from owner dashboard",
+                actor_id=self._settings.owner_switch_participant_id,
+            )
+            await session.commit()
+            return {
+                "id": task.id,
+                "title": task.title,
+                "est_min": task.est_min,
+                "scheduled_date": task.scheduled_date.isoformat(),
+                "status": task.status,
+                "ad_hoc": task.ad_hoc,
+                "placement_id": placement.id,
+                "week_start": selected_week.isoformat(),
+            }
+
+    async def task_detail(self, task_id: str) -> dict[str, Any]:
+        """Read the bounded task context used by the Execution Sub-Agent."""
+        async with self._db.locked_session() as session:
+            task, placement, commitment = await self._task(session, task_id)
+            return {
+                "id": task.id,
+                "title": task.title,
+                "est_min": task.est_min,
+                "scheduled_date": task.scheduled_date.isoformat(),
+                "status": task.status,
+                "ad_hoc": task.ad_hoc,
+                "resume_note": task.resume_note,
+                "commitment_title": (
+                    commitment.title if commitment is not None else None
+                ),
+                "week_start": placement.week_start.isoformat(),
+            }
+
     # --------------------------------------------------------- reconcile tool
 
     async def propose_reconcile(self, request: ReconcileRequest) -> dict[str, Any]:

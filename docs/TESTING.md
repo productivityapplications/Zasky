@@ -30,6 +30,9 @@ Test pure domain behavior without Switch or a model:
   ingestion.
 - Discord notifier routing, unconfigured no-op, 429 retry, permission failure,
   message truncation and mention suppression.
+- Dashboard goal, commitment and week-task creation through domain services;
+  delegation output and error mapping; execution sub-agent cost guard and
+  provider-failure handling.
 
 ## End-to-end tests
 1. Add year goal → add monthly commitment → create weekly tasks → approve week.
@@ -56,7 +59,7 @@ Test pure domain behavior without Switch or a model:
 ## Final staging evidence — 2026-11-07
 
 ```bash
-uv run pytest -q                 # 136 passed
+uv run pytest -q                 # 145 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 cd frontend && npm run build     # Next.js production build succeeds

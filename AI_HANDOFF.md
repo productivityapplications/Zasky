@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-07  
-**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed Vercel dashboard and active Discord HQ notification routing  
+**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed two-way Vercel dashboard, active Discord HQ routing and a bounded Execution Sub-Agent  
 **Current phase:** Post-Phase 9 cloud/dashboard upgrade — verified staging, awaiting authorized release  
-**Next task:** Send one plan approval and one reconcile approval to verify the new channel routes, then apply the Discord room privacy setting.
+**Next task:** Test New Goal, New Commitment, Add Task and Delegate to AI from the deployed Vercel UI, then apply the Discord room privacy setting.
 
 ## Current state
 
@@ -47,11 +47,11 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | `0f2bd14` (Discord routing active in recreated container) |
+| Deployed commit | Pending commit of the two-way dashboard release |
 | Current Git commit | `c72e666` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
-| Unit/integration/E2E evidence | 136 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write; Discord notifier routing tests |
+| Unit/integration/E2E evidence | 145 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -257,6 +257,28 @@
   channels; no test message was posted.
 - Health after recreation: `database ok`, `switch connected`, `schema current`,
   `model configured`.
+
+## Two-way dashboard and Execution Sub-Agent (2026-11-07)
+
+- Added dashboard write endpoints for year goals, month commitments and
+  week-pool tasks. Goals and commitments use `propose_record` plus the same
+  deterministic approval transaction as chat. Tasks use
+  `DomainService.add_week_task`, which appends to an existing commitment
+  placement instead of creating a duplicate.
+- Added `GET /api/dashboard/goals` and `GET /api/dashboard/commitments` for the
+  modal selectors.
+- Added a bounded `ExecutionSubAgent`: one tool-free model call through the
+  existing OpenRouter client and cost guard. It does not mutate planning state.
+  Output returns to the dashboard and posts to `#ai-workspace` when configured.
+- Added Next.js modals for New Goal, New Commitment and Add Task, plus a
+  task-pool "⚡ Delegate to AI" flow with loading, error and output states.
+- Extended the Next.js proxy allowlist and delegation timeout. `npm run build`
+  is clean.
+- Tests: **145 passed**; `ruff check .` clean; `mypy src` clean.
+- Live reads through the Vercel proxy shape returned 3 goals, 3 commitments and
+  8 tasks from Neon. Delegation of a missing task returned `404` without
+  invoking the model.
+- Every dashboard write targets the same Neon database Zasky reads in Discord.
 
 ## Known issues and blockers
 

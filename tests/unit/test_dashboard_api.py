@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 
 from tests.fixtures.identities import OWNER_ID, ROOM_ID
+from zasky.agent.execution import ExecutionSubAgentError
 from zasky.config import Settings
 from zasky.domain.schemas import (
     AddCommitmentRequest,
@@ -40,12 +41,33 @@ class FakePublisher:
     def __init__(self) -> None:
         self.delivered = True
         self.calls: list[dict[str, Any]] = []
+        self.delegate_calls: list[dict[str, Any]] = []
+        self.delegate_error: Exception | None = None
+        self.delegate_result = {
+            "task_id": "task-1",
+            "title": "Polish the dashboard",
+            "output": "Draft deliverable from the sub-agent.",
+            "model": "openai/gpt-4o-mini",
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "discord_delivered": True,
+        }
 
     async def publish_execution_result(
         self, *, title: str, body: str, task_id: str | None = None
     ) -> bool:
         self.calls.append({"title": title, "body": body, "task_id": task_id})
         return self.delivered
+
+    async def delegate_task(
+        self, task_id: str, instruction: str | None = None
+    ) -> dict[str, Any]:
+        self.delegate_calls.append(
+            {"task_id": task_id, "instruction": instruction}
+        )
+        if self.delegate_error is not None:
+            raise self.delegate_error
+        return {**self.delegate_result, "task_id": task_id}
 
 
 async def approve(service: DomainService, result: dict) -> dict:
@@ -140,6 +162,7 @@ async def dashboard_env(tmp_path, settings: Settings):
             db=db,
             domain=domain,
             publish_execution_result=publisher.publish_execution_result,
+            delegate_task=publisher.delegate_task,
         )
         api = create_dashboard_app(fake_app)  # type: ignore[arg-type]
         yield api, db, domain, publisher
@@ -309,3 +332,118 @@ async def test_execution_result_requires_configuration(dashboard_env) -> None:
         )
         assert response.status_code == 503
         assert "not configured" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_create_goal_and_commitment_from_dashboard(dashboard_env) -> None:
+    api, _db, _domain, _publisher = dashboard_env
+    async with client(api) as http:
+        goal_response = await http.post(
+            "/api/dashboard/goals",
+            json={
+                "title": "Launch the beta",
+                "year": 2027,
+                "evidence_of_done": "A reviewed launch checklist.",
+            },
+        )
+        assert goal_response.status_code == 200
+        goal = goal_response.json()["goal"]
+        assert goal["status"] == "active"
+
+        goals = await http.get("/api/dashboard/goals")
+        assert any(row["title"] == "Launch the beta" for row in goals.json()["goals"])
+
+        commitment_response = await http.post(
+            "/api/dashboard/commitments",
+            json={
+                "title": "Ship the beta",
+                "year": 2027,
+                "month": 1,
+                "goal_id": goal["id"],
+                "est_min": 300,
+                "deadline_local_date": "2027-01-31",
+                "consequence": "The beta slips.",
+                "priority": "high",
+            },
+        )
+        assert commitment_response.status_code == 200
+        commitment = commitment_response.json()["commitment"]
+        assert commitment["goal_id"] == goal["id"]
+
+        commitments = await http.get("/api/dashboard/commitments")
+        row = next(
+            item
+            for item in commitments.json()["commitments"]
+            if item["id"] == commitment["id"]
+        )
+        assert row["goal_title"] == "Launch the beta"
+
+
+@pytest.mark.asyncio
+async def test_create_task_from_dashboard_uses_week_pool(dashboard_env) -> None:
+    api, _db, _domain, _publisher = dashboard_env
+    async with client(api) as http:
+        commitments = await http.get("/api/dashboard/commitments")
+        commitment_id = next(
+            item["id"]
+            for item in commitments.json()["commitments"]
+            if item["title"] == "Ship the dashboard safely"
+        )
+        linked = await http.post(
+            "/api/dashboard/tasks",
+            json={
+                "title": "Add a dashboard task",
+                "est_min": 20,
+                "scheduled_date": "2026-11-06",
+                "commitment_id": commitment_id,
+            },
+        )
+        assert linked.status_code == 200
+        assert linked.json()["task"]["ad_hoc"] is False
+
+        ad_hoc = await http.post(
+            "/api/dashboard/tasks",
+            json={
+                "title": "Dashboard ad hoc task",
+                "est_min": 15,
+                "scheduled_date": "2026-11-06",
+            },
+        )
+        assert ad_hoc.status_code == 200
+        assert ad_hoc.json()["task"]["ad_hoc"] is True
+
+        listing = await http.get("/api/dashboard/tasks")
+        titles = {task["title"] for task in listing.json()["tasks"]}
+        assert "Add a dashboard task" in titles
+        assert "Dashboard ad hoc task" in titles
+
+
+@pytest.mark.asyncio
+async def test_delegate_returns_execution_output(dashboard_env) -> None:
+    api, _db, _domain, publisher = dashboard_env
+    async with client(api) as http:
+        listing = await http.get("/api/dashboard/tasks")
+        task = next(
+            item for item in listing.json()["tasks"] if item["status"] == "active"
+        )
+        response = await http.post(
+            f"/api/dashboard/delegate/{task['id']}",
+            json={"instruction": "Make it concise."},
+        )
+        assert response.status_code == 200
+        assert response.json()["output"].startswith("Draft deliverable")
+        assert publisher.delegate_calls == [
+            {"task_id": task["id"], "instruction": "Make it concise."}
+        ]
+
+
+@pytest.mark.asyncio
+async def test_delegate_conflict_is_reported(dashboard_env) -> None:
+    api, _db, _domain, publisher = dashboard_env
+    publisher.delegate_error = ExecutionSubAgentError(
+        "CONFLICT", "A completed task cannot be delegated."
+    )
+    async with client(api) as http:
+        response = await http.post("/api/dashboard/delegate/task-1")
+        assert response.status_code == 409
+        assert "cannot be delegated" in response.json()["detail"]

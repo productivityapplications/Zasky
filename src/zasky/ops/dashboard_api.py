@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -17,8 +17,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import func, select
 
+from zasky.agent.execution import ExecutionSubAgentError
 from zasky.domain.errors import DomainError
-from zasky.domain.schemas import CompleteTaskRequest
+from zasky.domain.schemas import AddCommitmentRequest, CompleteTaskRequest
 from zasky.integrations.discord import DiscordNotificationError
 from zasky.planner.core import as_utc
 from zasky.storage.models import (
@@ -29,6 +30,7 @@ from zasky.storage.models import (
     MonthCommitment,
     WeekPlacement,
     WeekTask,
+    YearGoal,
 )
 
 if TYPE_CHECKING:
@@ -43,6 +45,34 @@ class ExecutionResultBody(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str = Field(min_length=1, max_length=6000)
     task_id: str | None = Field(default=None, max_length=36)
+
+
+class GoalCreateBody(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    year: int = Field(ge=2000, le=2200)
+    evidence_of_done: str = Field(min_length=1, max_length=1000)
+
+
+class CommitmentCreateBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    year: int = Field(ge=2000, le=2200)
+    month: int = Field(ge=1, le=12)
+    goal_id: str | None = None
+    est_min: int = Field(gt=0, le=100000)
+    deadline_local_date: date | None = None
+    consequence: str | None = Field(default=None, max_length=1000)
+    priority: Literal["high", "normal", "low"] = "normal"
+
+
+class TaskCreateBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    est_min: int = Field(gt=0, le=100000)
+    scheduled_date: date | None = None
+    commitment_id: str | None = None
+
+
+class DelegateBody(BaseModel):
+    instruction: str | None = Field(default=None, max_length=2000)
 
 
 def _secret_value(value: SecretStr | str | None) -> str:
@@ -138,6 +168,42 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
 
     def local_today() -> date:
         return datetime.now(UTC).astimezone(ZoneInfo(settings.timezone)).date()
+
+    def owner_identity() -> tuple[str, str]:
+        return (
+            settings.owner_switch_participant_id,
+            settings.switch_room_id,
+        )
+
+    def raise_domain_error(exc: DomainError) -> None:
+        status_code = {
+            "NOT_FOUND": 404,
+            "CONFLICT": 409,
+            "PROPOSAL_STALE": 409,
+            "PROPOSAL_EXPIRED": 409,
+            "CAPACITY_EXCEEDED": 409,
+            "RATE_LIMITED": 429,
+            "BUDGET_EXCEEDED": 402,
+            "MODEL_UNAVAILABLE": 503,
+        }.get(exc.code, 400)
+        raise HTTPException(status_code=status_code, detail=exc.message) from exc
+
+    async def approve_record(request: AddCommitmentRequest) -> dict[str, Any]:
+        actor_id, room_id = owner_identity()
+        proposal = await app.domain.propose_record(request)
+        resolved = await app.domain.resolve_proposal(
+            action="approve",
+            code=str(proposal["proposal"]),
+            actor_id=actor_id,
+            room_id=room_id,
+        )
+        applied = resolved.get("applied")
+        if not isinstance(applied, dict):
+            raise HTTPException(
+                status_code=409,
+                detail="The record proposal did not apply.",
+            )
+        return applied
 
     @dashboard.get("/api/dashboard/today", dependencies=[Depends(require_token)])
     async def today(
@@ -237,6 +303,149 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                 payload[key].append(entry)
             return payload
 
+    @dashboard.get("/api/dashboard/goals", dependencies=[Depends(require_token)])
+    async def goals() -> dict[str, Any]:
+        async with app.db.locked_session() as session:
+            rows = (
+                await session.execute(
+                    select(YearGoal).order_by(
+                        YearGoal.year.desc(), YearGoal.created_at
+                    )
+                )
+            ).scalars().all()
+            return {
+                "goals": [
+                    {
+                        "id": goal.id,
+                        "title": goal.title,
+                        "year": goal.year,
+                        "evidence_of_done": goal.evidence_of_done,
+                        "status": goal.status,
+                    }
+                    for goal in rows
+                ]
+            }
+
+    @dashboard.post(
+        "/api/dashboard/goals", dependencies=[Depends(require_token)]
+    )
+    async def create_goal(body: GoalCreateBody) -> dict[str, Any]:
+        try:
+            applied = await approve_record(
+                AddCommitmentRequest(
+                    operation="create",
+                    entry_type="year_goal",
+                    title=body.title,
+                    year=body.year,
+                    evidence_of_done=body.evidence_of_done,
+                )
+            )
+        except DomainError as exc:
+            raise_domain_error(exc)
+        return {
+            "ok": True,
+            "goal": {
+                "id": applied["entity_id"],
+                "title": body.title.strip(),
+                "year": body.year,
+                "evidence_of_done": body.evidence_of_done,
+                "status": "active",
+            },
+        }
+
+    @dashboard.get(
+        "/api/dashboard/commitments",
+        dependencies=[Depends(require_token)],
+    )
+    async def commitments() -> dict[str, Any]:
+        async with app.db.locked_session() as session:
+            rows = (
+                await session.execute(
+                    select(MonthCommitment, YearGoal)
+                    .outerjoin(YearGoal, MonthCommitment.goal_id == YearGoal.id)
+                    .order_by(
+                        MonthCommitment.year.desc(),
+                        MonthCommitment.month.desc(),
+                        MonthCommitment.created_at,
+                    )
+                )
+            ).all()
+            return {
+                "commitments": [
+                    {
+                        "id": commitment.id,
+                        "title": commitment.title,
+                        "year": commitment.year,
+                        "month": commitment.month,
+                        "goal_id": commitment.goal_id,
+                        "goal_title": goal.title if goal is not None else None,
+                        "est_total_min": commitment.est_total_min,
+                        "deadline_local_date": (
+                            commitment.deadline_local_date.isoformat()
+                            if commitment.deadline_local_date
+                            else None
+                        ),
+                        "priority": commitment.priority,
+                        "status": commitment.status,
+                    }
+                    for commitment, goal in rows
+                ]
+            }
+
+    @dashboard.post(
+        "/api/dashboard/commitments",
+        dependencies=[Depends(require_token)],
+    )
+    async def create_commitment(body: CommitmentCreateBody) -> dict[str, Any]:
+        try:
+            applied = await approve_record(
+                AddCommitmentRequest(
+                    operation="create",
+                    entry_type="month_commitment",
+                    title=body.title,
+                    year=body.year,
+                    month=body.month,
+                    goal_id=body.goal_id,
+                    est_min=body.est_min,
+                    deadline_local_date=body.deadline_local_date,
+                    consequence=body.consequence,
+                    priority=body.priority,
+                )
+            )
+        except DomainError as exc:
+            raise_domain_error(exc)
+        return {
+            "ok": True,
+            "commitment": {
+                "id": applied["entity_id"],
+                "title": body.title.strip(),
+                "year": body.year,
+                "month": body.month,
+                "goal_id": body.goal_id,
+                "est_total_min": body.est_min,
+                "deadline_local_date": (
+                    body.deadline_local_date.isoformat()
+                    if body.deadline_local_date
+                    else None
+                ),
+                "priority": body.priority,
+                "status": "active",
+            },
+        }
+
+    @dashboard.post("/api/dashboard/tasks", dependencies=[Depends(require_token)])
+    async def create_task(body: TaskCreateBody) -> dict[str, Any]:
+        try:
+            task = await app.domain.add_week_task(
+                title=body.title,
+                est_min=body.est_min,
+                scheduled_date=body.scheduled_date,
+                commitment_id=body.commitment_id,
+            )
+        except DomainError as exc:
+            raise_domain_error(exc)
+        return {"ok": True, "task": task}
+
     @dashboard.get("/api/dashboard/tasks", dependencies=[Depends(require_token)])
     async def tasks(
         status: str | None = Query(default=None),
@@ -317,6 +526,33 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             "status": result.get("status", "completed"),
             "already": result.get("already"),
         }
+
+    @dashboard.post(
+        "/api/dashboard/delegate/{task_id}",
+        dependencies=[Depends(require_token)],
+    )
+    async def delegate(
+        task_id: str,
+        body: DelegateBody | None = None,
+    ) -> dict[str, Any]:
+        try:
+            result = await app.delegate_task(
+                task_id,
+                body.instruction if body else None,
+            )
+        except DomainError as exc:
+            raise_domain_error(exc)
+        except ExecutionSubAgentError as exc:
+            status_code = {
+                "RATE_LIMITED": 429,
+                "BUDGET_EXCEEDED": 402,
+                "MODEL_UNAVAILABLE": 503,
+                "CONFLICT": 409,
+            }.get(exc.code, 502)
+            raise HTTPException(
+                status_code=status_code, detail=exc.message
+            ) from exc
+        return {"ok": True, **result}
 
     @dashboard.post(
         "/api/internal/execution-results",

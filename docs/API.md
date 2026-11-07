@@ -237,8 +237,59 @@ Example response shape for `/api/dashboard/today`:
 
 Completion goes through `DomainService.complete_task`, so it updates
 `week_tasks`, matching `day_plan_items.outcome`, the scope revisions and the
-append-only audit event in one transaction. The dashboard cannot create,
-rename, park or reschedule tasks.
+append-only audit event in one transaction.
+
+### Dashboard writes and delegation
+
+All write routes use the existing deterministic domain services. The dashboard
+token is the owner authorization boundary; no model is involved in creating or
+approving records.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/dashboard/goals` | Year goals for the dashboard selectors |
+| `POST` | `/api/dashboard/goals` | Create a year goal (`title`, `year`, `evidence_of_done`) |
+| `GET` | `/api/dashboard/commitments` | Month commitments with linked goal titles |
+| `POST` | `/api/dashboard/commitments` | Create a month commitment, optionally linked to a goal |
+| `POST` | `/api/dashboard/tasks` | Add a task to the current week pool; links a commitment or creates an ad hoc task |
+| `POST` | `/api/dashboard/delegate/{task_id}` | Run the bounded Execution Sub-Agent for one task |
+
+Goal and commitment creation uses `propose_record` followed by the same
+deterministic `resolve_proposal` path as chat. Task creation uses
+`DomainService.add_week_task`, which appends to an existing placement instead of
+creating a duplicate placement. Delegation uses a tool-free LLM call with the
+existing cost guard and does not mutate planning state.
+
+```json
+{
+  "title": "Ship the beta",
+  "year": 2027,
+  "month": 1,
+  "goal_id": "goal-uuid",
+  "est_min": 300,
+  "deadline_local_date": "2027-01-31",
+  "priority": "high"
+}
+```
+
+Delegate response:
+
+```json
+{
+  "ok": true,
+  "task_id": "task-uuid",
+  "title": "Draft the demo script",
+  "output": "Draft deliverable …",
+  "model": "openai/gpt-4o-mini",
+  "prompt_tokens": 420,
+  "completion_tokens": 180,
+  "discord_delivered": true
+}
+```
+
+The sub-agent result is also posted to `#ai-workspace` when configured. The
+task remains unchanged; the dashboard cannot approve plans or mutate scheduling
+through delegation.
 
 ## Outbound Discord routing
 

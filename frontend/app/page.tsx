@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 type Tab = "today" | "tasks" | "reconciliation";
 type TaskFilter = "all" | "active" | "parked" | "completed";
@@ -85,6 +91,40 @@ type ReconciliationsPayload = {
   reconciliations: Reconciliation[];
 };
 
+type Goal = {
+  id: string;
+  title: string;
+  year: number;
+  evidence_of_done: string;
+  status: string;
+};
+
+type Commitment = {
+  id: string;
+  title: string;
+  year: number;
+  month: number;
+  goal_id: string | null;
+  goal_title: string | null;
+  est_total_min: number;
+  deadline_local_date: string | null;
+  priority: string;
+  status: string;
+};
+
+type GoalsPayload = { goals: Goal[] };
+type CommitmentsPayload = { commitments: Commitment[] };
+
+type ModalKind = "goal" | "commitment" | "task" | null;
+
+type DelegateState = {
+  task: DashboardTask;
+  status: "loading" | "done" | "error";
+  output?: string;
+  error?: string;
+  discordDelivered?: boolean;
+} | null;
+
 const TAB_LABELS: Record<Tab, string> = {
   today: "Today's Plan",
   tasks: "All Tasks",
@@ -102,6 +142,30 @@ async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
     throw new Error(detail);
   }
   return payload as T;
+}
+
+async function sendJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail =
+      payload && typeof payload.detail === "string"
+        ? payload.detail
+        : `Request failed (${response.status})`;
+    throw new Error(detail);
+  }
+  return payload as T;
+}
+
+function localDateString(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 function formatDate(value: string, long = true): string {
@@ -203,18 +267,400 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`status status-${status}`}>{status}</span>;
 }
 
+function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className={classNames("modal-card", wide && "is-wide")}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">{subtitle ?? "Owner action"}</p>
+            <h2>{title}</h2>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FormError({ message }: { message: string | null }) {
+  if (!message) {
+    return null;
+  }
+  return <p className="form-error">{message}</p>;
+}
+
+function GoalModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [evidence, setEvidence] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await sendJson("/api/dashboard/goals", {
+        title,
+        year: Number(year),
+        evidence_of_done: evidence,
+      });
+      await onSaved();
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : "Could not save goal.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="New year goal"
+      subtitle="Planning cascade"
+      onClose={onClose}
+    >
+      <form className="form-grid" onSubmit={submit}>
+        <label className="field field-full">
+          <span>Goal title</span>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="What should be true this year?"
+            maxLength={160}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Year</span>
+          <input
+            type="number"
+            min={2000}
+            max={2200}
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+            required
+          />
+        </label>
+        <label className="field field-full">
+          <span>Evidence of done</span>
+          <textarea
+            value={evidence}
+            onChange={(event) => setEvidence(event.target.value)}
+            placeholder="What artifact or result proves this is complete?"
+            rows={4}
+            maxLength={1000}
+            required
+          />
+        </label>
+        <FormError message={formError} />
+        <div className="form-actions">
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary-button" disabled={submitting}>
+            {submitting ? "Saving…" : "Create goal"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function CommitmentModal({
+  goals,
+  onClose,
+  onSaved,
+}: {
+  goals: Goal[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const now = new Date();
+  const [title, setTitle] = useState("");
+  const [year, setYear] = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [goalId, setGoalId] = useState(goals[0]?.id ?? "");
+  const [estimate, setEstimate] = useState("120");
+  const [deadline, setDeadline] = useState("");
+  const [consequence, setConsequence] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await sendJson("/api/dashboard/commitments", {
+        title,
+        year: Number(year),
+        month: Number(month),
+        goal_id: goalId || null,
+        est_min: Number(estimate),
+        deadline_local_date: deadline || null,
+        consequence: consequence || null,
+        priority,
+      });
+      await onSaved();
+    } catch (reason) {
+      setFormError(
+        reason instanceof Error ? reason.message : "Could not save commitment.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="New month commitment"
+      subtitle="Planning cascade"
+      onClose={onClose}
+      wide
+    >
+      <form className="form-grid" onSubmit={submit}>
+        <label className="field field-full">
+          <span>Commitment title</span>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="What concrete outcome belongs to this month?"
+            maxLength={200}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Year</span>
+          <input
+            type="number"
+            min={2000}
+            max={2200}
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Month</span>
+          <select value={month} onChange={(event) => setMonth(event.target.value)}>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
+              <option key={value} value={value}>
+                {new Intl.DateTimeFormat("en-US", {
+                  month: "long",
+                  timeZone: "UTC",
+                }).format(new Date(Date.UTC(2026, value - 1, 1)))}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Linked goal (optional)</span>
+          <select value={goalId} onChange={(event) => setGoalId(event.target.value)}>
+            <option value="">No linked goal</option>
+            {goals.map((goal) => (
+              <option key={goal.id} value={goal.id}>
+                {goal.title} ({goal.year})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Estimate (minutes)</span>
+          <input
+            type="number"
+            min={1}
+            value={estimate}
+            onChange={(event) => setEstimate(event.target.value)}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Deadline (optional)</span>
+          <input
+            type="date"
+            value={deadline}
+            onChange={(event) => setDeadline(event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Priority</span>
+          <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+            <option value="high">high</option>
+            <option value="normal">normal</option>
+            <option value="low">low</option>
+          </select>
+        </label>
+        <label className="field field-full">
+          <span>Consequence (optional)</span>
+          <textarea
+            value={consequence}
+            onChange={(event) => setConsequence(event.target.value)}
+            placeholder="What happens if this commitment slips?"
+            rows={3}
+            maxLength={1000}
+          />
+        </label>
+        <FormError message={formError} />
+        <div className="form-actions">
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary-button" disabled={submitting}>
+            {submitting ? "Saving…" : "Create commitment"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function TaskModal({
+  commitments,
+  onClose,
+  onSaved,
+}: {
+  commitments: Commitment[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [estimate, setEstimate] = useState("45");
+  const [scheduledDate, setScheduledDate] = useState(localDateString());
+  const [commitmentId, setCommitmentId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      await sendJson("/api/dashboard/tasks", {
+        title,
+        est_min: Number(estimate),
+        scheduled_date: scheduledDate || null,
+        commitment_id: commitmentId || null,
+      });
+      await onSaved();
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : "Could not save task.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal title="Add task to this week" subtitle="Week pool" onClose={onClose}>
+      <form className="form-grid" onSubmit={submit}>
+        <label className="field field-full">
+          <span>Task title</span>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="What concrete work should enter the week pool?"
+            maxLength={200}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Estimate (minutes)</span>
+          <input
+            type="number"
+            min={1}
+            value={estimate}
+            onChange={(event) => setEstimate(event.target.value)}
+            required
+          />
+        </label>
+        <label className="field">
+          <span>Scheduled date</span>
+          <input
+            type="date"
+            value={scheduledDate}
+            onChange={(event) => setScheduledDate(event.target.value)}
+          />
+        </label>
+        <label className="field field-full">
+          <span>Commitment (optional)</span>
+          <select
+            value={commitmentId}
+            onChange={(event) => setCommitmentId(event.target.value)}
+          >
+            <option value="">Ad hoc task (no commitment)</option>
+            {commitments.map((commitment) => (
+              <option key={commitment.id} value={commitment.id}>
+                {commitment.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <FormError message={formError} />
+        <div className="form-actions">
+          <button type="button" className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="primary-button" disabled={submitting}>
+            {submitting ? "Adding…" : "Add to week pool"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function TaskRow({
   task,
   busy,
   onComplete,
+  onDelegate,
   showDate = true,
 }: {
   task: DashboardTask;
   busy: boolean;
   onComplete: (id: string) => void;
+  onDelegate?: (task: DashboardTask) => void;
   showDate?: boolean;
 }) {
   const completed = task.status === "completed";
+  const delegatable =
+    Boolean(onDelegate) && !completed && task.status !== "cancelled";
   return (
     <article className={classNames("task-row", completed && "is-completed")}>
       <TaskCheck
@@ -231,7 +677,18 @@ function TaskRow({
       <div className="task-main">
         <div className="task-title-line">
           <h3>{task.title}</h3>
-          <StatusPill status={task.status} />
+          <div className="task-side">
+            <StatusPill status={task.status} />
+            {delegatable ? (
+              <button
+                type="button"
+                className="delegate-button"
+                onClick={() => onDelegate?.(task)}
+              >
+                ⚡ Delegate to AI
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="task-meta">
           {showDate ? <span>{formatDate(task.scheduled_date, false)}</span> : null}
@@ -312,6 +769,62 @@ function EmptyState({
   );
 }
 
+function DelegateModal({
+  state,
+  onClose,
+}: {
+  state: NonNullable<DelegateState>;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title="Execution Sub-Agent"
+      subtitle={state.task.title}
+      onClose={onClose}
+      wide
+    >
+      <div className="delegate-body">
+        {state.status === "loading" ? (
+          <div className="delegate-loading">
+            <span className="spinner spinner-large" />
+            <div>
+              <h3>Working on the task…</h3>
+              <p>
+                The sub-agent is producing a draft from the task and its
+                commitment. Planning state will not change.
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {state.status === "error" ? (
+          <div className="delegate-error">
+            <h3>Delegation failed</h3>
+            <p>{state.error}</p>
+          </div>
+        ) : null}
+        {state.status === "done" ? (
+          <>
+            <div className="delegate-meta">
+              <span className="meta-pill">Draft ready</span>
+              <span className="meta-pill">
+                {state.discordDelivered
+                  ? "Also posted to #ai-workspace"
+                  : "Workspace channel not configured"}
+              </span>
+            </div>
+            <pre className="delegate-output">{state.output}</pre>
+          </>
+        ) : null}
+      </div>
+      <div className="form-actions">
+        <button type="button" className="ghost-button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function LoadingState() {
   return (
     <div className="loading-grid" aria-label="Loading dashboard">
@@ -330,6 +843,10 @@ export default function DashboardPage() {
   const [tasks, setTasks] = useState<TasksPayload | null>(null);
   const [reconciliations, setReconciliations] =
     useState<ReconciliationsPayload | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [commitments, setCommitments] = useState<Commitment[]>([]);
+  const [modal, setModal] = useState<ModalKind>(null);
+  const [delegateState, setDelegateState] = useState<DelegateState>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,17 +854,27 @@ export default function DashboardPage() {
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
 
   const loadAll = useCallback(async (signal?: AbortSignal) => {
-    const [todayPayload, tasksPayload, reconciliationPayload] = await Promise.all([
+    const [
+      todayPayload,
+      tasksPayload,
+      reconciliationPayload,
+      goalsPayload,
+      commitmentsPayload,
+    ] = await Promise.all([
       fetchJson<TodayPayload>("/api/dashboard/today", signal),
       fetchJson<TasksPayload>("/api/dashboard/tasks", signal),
       fetchJson<ReconciliationsPayload>(
         "/api/dashboard/reconciliations",
         signal,
       ),
+      fetchJson<GoalsPayload>("/api/dashboard/goals", signal),
+      fetchJson<CommitmentsPayload>("/api/dashboard/commitments", signal),
     ]);
     setToday(todayPayload);
     setTasks(tasksPayload);
     setReconciliations(reconciliationPayload);
+    setGoals(goalsPayload.goals);
+    setCommitments(commitmentsPayload.commitments);
     setSyncedAt(
       new Intl.DateTimeFormat("en-US", {
         hour: "numeric",
@@ -427,6 +954,40 @@ export default function DashboardPage() {
     return items.filter((task) => task.status === filter);
   }, [filter, tasks]);
 
+  const activeGoals = useMemo(
+    () => goals.filter((goal) => goal.status === "active"),
+    [goals],
+  );
+  const activeCommitments = useMemo(
+    () => commitments.filter((item) => item.status === "active"),
+    [commitments],
+  );
+
+  const delegate = useCallback(async (task: DashboardTask) => {
+    setDelegateState({ task, status: "loading" });
+    try {
+      const payload = await sendJson<{
+        output: string;
+        discord_delivered?: boolean;
+      }>(`/api/dashboard/delegate/${encodeURIComponent(task.id)}`, {});
+      setDelegateState({
+        task,
+        status: "done",
+        output: payload.output,
+        discordDelivered: Boolean(payload.discord_delivered),
+      });
+    } catch (reason) {
+      setDelegateState({
+        task,
+        status: "error",
+        error:
+          reason instanceof Error
+            ? reason.message
+            : "The execution sub-agent failed.",
+      });
+    }
+  }, []);
+
   const planCount = (today?.must.length ?? 0) + (today?.should.length ?? 0);
 
   return (
@@ -484,6 +1045,36 @@ export default function DashboardPage() {
               </span>
               <span className="stat-label">recoveries</span>
             </div>
+          </div>
+        </section>
+
+        <section className="action-strip" aria-label="Planning actions">
+          <div>
+            <p className="eyebrow">Build the cascade</p>
+            <span>Name the outcome, then the work. Zasky keeps the arithmetic.</span>
+          </div>
+          <div className="action-buttons">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setModal("goal")}
+            >
+              + New Goal
+            </button>
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => setModal("commitment")}
+            >
+              + New Commitment
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => setModal("task")}
+            >
+              + Add Task
+            </button>
           </div>
         </section>
 
@@ -651,9 +1242,18 @@ export default function DashboardPage() {
                     <p className="eyebrow">Task pool</p>
                     <h2>All Tasks</h2>
                   </div>
-                  <span className="meta-pill">
-                    {tasks?.counts.total ?? 0} total
-                  </span>
+                  <div className="heading-actions">
+                    <span className="meta-pill">
+                      {tasks?.counts.total ?? 0} total
+                    </span>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => setModal("task")}
+                    >
+                      + Add Task
+                    </button>
+                  </div>
                 </div>
 
                 <div className="filter-row" role="group" aria-label="Filter tasks">
@@ -689,6 +1289,7 @@ export default function DashboardPage() {
                         task={task}
                         busy={Boolean(pending[task.id])}
                         onComplete={(id) => void complete(id)}
+                        onDelegate={(selected) => void delegate(selected)}
                       />
                     ))}
                   </div>
@@ -777,6 +1378,42 @@ export default function DashboardPage() {
             ) : null}
           </>
         )}
+
+        {modal === "goal" ? (
+          <GoalModal
+            onClose={() => setModal(null)}
+            onSaved={async () => {
+              setModal(null);
+              await refresh();
+            }}
+          />
+        ) : null}
+        {modal === "commitment" ? (
+          <CommitmentModal
+            goals={activeGoals}
+            onClose={() => setModal(null)}
+            onSaved={async () => {
+              setModal(null);
+              await refresh();
+            }}
+          />
+        ) : null}
+        {modal === "task" ? (
+          <TaskModal
+            commitments={activeCommitments}
+            onClose={() => setModal(null)}
+            onSaved={async () => {
+              setModal(null);
+              await refresh();
+            }}
+          />
+        ) : null}
+        {delegateState ? (
+          <DelegateModal
+            state={delegateState}
+            onClose={() => setDelegateState(null)}
+          />
+        ) : null}
 
         <footer className="footer">
           <span>Zasky · owner-only dashboard</span>

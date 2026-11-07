@@ -173,3 +173,13 @@ This does **not** replace Switch:
 
 `scripts/setup_discord.py` also uses Discord REST directly, as requested, and is
 not executed by the agent.
+
+### Execution Sub-Agent (2026-11-07)
+
+The dashboard can delegate one existing task to a bounded execution sub-agent.
+It is application-triggered, not a chat tool:
+
+- one tool-free OpenRouter call with the same model and cost guard as chat;
+- no planning mutation, no task invention and no approval authority;
+- output is returned to the dashboard and posted to `#ai-workspace`;
+- the route is token-gated and synchronous, with a 55-second proxy timeout.

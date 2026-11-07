@@ -712,3 +712,56 @@ async def test_concurrent_approval_applies_once(domain_env) -> None:
     )
     goals = await service.query(QueryRequest(state="goals", horizon="2027"))
     assert len(goals["goals"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_task_appends_to_existing_commitment_placement(
+    domain_env,
+) -> None:
+    _db, service, _settings = domain_env
+    goal = await create_goal(service)
+    await approve(service, goal)
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    commitment = await create_commitment(
+        service, goal_id=goals["goals"][0]["id"]
+    )
+    await approve(service, commitment)
+    commitments = await service.query(
+        QueryRequest(state="month", horizon="2027-01")
+    )
+    commitment_id = commitments["commitments"][0]["id"]
+    week = await create_week(service, commitment_id)
+    await approve(service, week)
+
+    task = await service.add_week_task(
+        title="Add the dashboard task",
+        est_min=20,
+        week_start=date(2026, 11, 2),
+        scheduled_date=date(2026, 11, 6),
+        commitment_id=commitment_id,
+    )
+    assert task["title"] == "Add the dashboard task"
+    assert task["ad_hoc"] is False
+
+    week_state = await service.query(
+        QueryRequest(state="week", horizon="2026-11-02")
+    )
+    assert len(week_state["tasks"]) == 3
+    detail = await service.task_detail(task["id"])
+    assert detail["commitment_title"] == "Ship the planning loop"
+    assert detail["scheduled_date"] == "2026-11-06"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_ad_hoc_task_uses_week_pool(domain_env) -> None:
+    _db, service, _settings = domain_env
+    task = await service.add_week_task(
+        title="Dashboard ad hoc task",
+        est_min=15,
+        week_start=date(2026, 11, 2),
+        scheduled_date=date(2026, 11, 6),
+    )
+    assert task["ad_hoc"] is True
+    assert task["status"] == "active"
+    detail = await service.task_detail(task["id"])
+    assert detail["commitment_title"] is None
