@@ -19,7 +19,7 @@
   recovery, Phase 3 deterministic domain/planner/tool schemas, Phase 4
   OpenRouter Chat Completions orchestration, proactive features, Neon Postgres
   migration and a Vercel-ready Next.js dashboard.
-- Database schema revision: `9f4c1a7b2d30`.
+- Database schema revision: `526c14430d14`.
 - Domain tools: exactly seven strict schemas; proposal approval is deterministic.
 - Staging model: `openai/gpt-4o-mini` via OpenRouter Chat Completions; pricing
   `$0.15/$0.60` per 1M; `$20`/month and `100` requests/day caps.
@@ -47,11 +47,11 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | `36cea38` (calendar feed + Google Calendar links) |
+| Deployed commit | Pending redesign/delegation release commit |
 | Current Git commit | `36cea38` plus docs checkpoint |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
-| Unit/integration/E2E evidence | 151 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
+| Unit/integration/E2E evidence | 158 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -274,7 +274,7 @@
   task-pool "⚡ Delegate to AI" flow with loading, error and output states.
 - Extended the Next.js proxy allowlist and delegation timeout. `npm run build`
   is clean.
-- Tests: **151 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **158 passed**; `ruff check .` clean; `mypy src` clean.
 - Live reads through the Vercel proxy shape returned 3 goals, 3 commitments and
   8 tasks from Neon. Delegation of a missing task returned `404` without
   invoking the model.
@@ -298,9 +298,27 @@
   Briefing appends an all-day Google Calendar link.
 - Added the dashboard **📅 Sync to Calendar** button and per-task 📅 links.
 - Live Neon feed check: 9 VEVENTs, 6 task alarms, fixed events present.
-- Tests: **151 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - The feed is available through the Vercel proxy with the dashboard token; the
   optional direct VPS URL uses `?token=`.
+
+## Tailwind redesign and delegation workflow (2026-11-07)
+
+- Implemented the approved `frontend/MOCKUP.md` design with Tailwind: yellow
+  navigation rail, light plan workspace, dark All Tasks queue and analytics dock.
+- Added Manrope, Tailwind tokens and componentized shell/plan/tasks/reconciliation/
+  stats/modals. Existing actions, calendar links and API behavior are preserved.
+- Added migration `526c14430d14` for `delegation_proposals`.
+- Added deterministic `delegate ZK-XXXX` proposals for explicit inability/at-risk
+  language, and `approve execution ZK-YYYY` sign-off. The seven domain tools are
+  unchanged; no model tool can approve or complete execution.
+- Execution prompt now restricts the sub-agent to drafting, snippets, outlines
+  and document formatting, and always returns:
+  **1. The Deliverable**, **2. What I Did**, **3. Verification Checklist**.
+- Dashboard delegate modal is now Confirm Delegation → structured output →
+  Approve Execution & Complete Task.
+- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Neon schema: `526c14430d14`; container rebuilt with the new backend.
 
 ## Known issues and blockers
 

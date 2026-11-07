@@ -9,6 +9,19 @@ def test_exact_commands_still_parse() -> None:
     assert parse_approval_command("approve").code is None
 
 
+def test_delegation_and_execution_commands_parse() -> None:
+    delegated = parse_approval_command("delegate ZK-4F8Q")
+    assert delegated is not None
+    assert delegated.action == "delegate"
+    assert delegated.code == "ZK-4F8Q"
+    approved = parse_approval_command("approve execution ZK-9K2M")
+    assert approved is not None
+    assert approved.action == "approve_execution"
+    assert approved.code == "ZK-9K2M"
+    assert parse_approval_command("delegate") is None
+    assert parse_approval_command("approve execution") is None
+
+
 def test_conversational_approval_is_never_an_exact_command() -> None:
     for phrase in ("looks good", "looks good!", "sounds good", "lock it in",
                    "lock that in", "go ahead", "yes please", "approved"):

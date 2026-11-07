@@ -665,7 +665,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         body: DelegateBody | None = None,
     ) -> dict[str, Any]:
         try:
-            result = await app.delegate_task(
+            result = await app.delegate_from_dashboard(
                 task_id,
                 body.instruction if body else None,
             )
@@ -681,6 +681,17 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             raise HTTPException(
                 status_code=status_code, detail=exc.message
             ) from exc
+        return {"ok": True, **result}
+
+    @dashboard.post(
+        "/api/dashboard/executions/{execution_code}/approve",
+        dependencies=[Depends(require_token)],
+    )
+    async def approve_execution(execution_code: str) -> dict[str, Any]:
+        try:
+            result = await app.approve_execution(execution_code)
+        except DomainError as exc:
+            raise_domain_error(exc)
         return {"ok": True, **result}
 
     @dashboard.post(

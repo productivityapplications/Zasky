@@ -16,6 +16,7 @@ from zasky.agent.context import ContextBuilder
 from zasky.agent.execution import ExecutionSubAgent, ExecutionSubAgentError
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
+from zasky.domain.delegation import DelegationService
 from zasky.domain.errors import DomainError
 from zasky.domain.schemas import QueryRequest
 from zasky.domain.service import DomainService
@@ -39,12 +40,20 @@ from zasky.switch.operations import SwitchOperations
 logger = logging.getLogger(__name__)
 
 
+def _escape_md(text: str) -> str:
+    escaped = str(text).replace("\\", "\\\\")
+    for char in ("*", "_", "`", "~", "|"):
+        escaped = escaped.replace(char, "\\" + char)
+    return escaped
+
+
 class ZaskyApp:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.db = Database.from_settings(settings)
         self.ops = SwitchOperations(settings)
         self.domain = DomainService(self.db, settings)
+        self.delegations = DelegationService(self.db, settings)
         self.briefing = BriefingBuilder(self.db, settings)
         self.discord = DiscordNotifier(settings)
         self.alarm_scheduler = AlarmScheduler(self.db, self.ops, settings)
@@ -330,6 +339,7 @@ class ZaskyApp:
         self,
         task_id: str,
         instruction: str | None = None,
+        execution_code: str | None = None,
     ) -> dict[str, object]:
         """Run the bounded Execution Sub-Agent for one owner-selected task."""
         if self.execution is None:
@@ -344,11 +354,21 @@ class ZaskyApp:
                 "A completed or cancelled task cannot be delegated.",
             )
         result = await self.execution.run(task=task, instruction=instruction)
+        output = str(result["output"])
+        if execution_code:
+            await self.delegations.mark_awaiting_signoff(
+                execution_code, output
+            )
         delivered = False
         try:
+            body = (
+                self._execution_signoff(output, execution_code)
+                if execution_code
+                else output
+            )
             delivered = await self.publish_execution_result(
                 title=str(task["title"]),
-                body=str(result["output"]),
+                body=body,
                 task_id=task_id,
             )
         except DiscordNotificationError as exc:
@@ -362,12 +382,72 @@ class ZaskyApp:
         return {
             "task_id": task_id,
             "title": task["title"],
-            "output": result["output"],
+            "output": output,
             "model": result["model"],
             "prompt_tokens": result["prompt_tokens"],
             "completion_tokens": result["completion_tokens"],
             "discord_delivered": delivered,
+            "execution_code": execution_code,
         }
+
+    @staticmethod
+    def _execution_signoff(output: str, execution_code: str | None) -> str:
+        if not execution_code:
+            return output
+        return (
+            f"{output}\n\n---\n"
+            "**Please review the deliverable above.** If this meets your "
+            "standards, reply "
+            f"`approve execution {execution_code}` to mark the task complete."
+        )
+
+    async def delegate_from_dashboard(
+        self, task_id: str, instruction: str | None = None
+    ) -> dict[str, object]:
+        """Start the same two-step delegation flow from the owner dashboard."""
+        if self.execution is None:
+            raise ExecutionSubAgentError(
+                "MODEL_UNAVAILABLE",
+                "The execution sub-agent needs a configured model.",
+            )
+        proposal = await self.delegations.propose(task_id)
+        started = await self.delegations.start(
+            str(proposal["code"]),
+            actor_id=self.settings.owner_switch_participant_id,
+        )
+        if started.get("already") == "awaiting_signoff":
+            return {
+                "task_id": task_id,
+                "title": started.get("task_title"),
+                "output": started.get("output_markdown"),
+                "execution_code": started.get("execution_code"),
+                "discord_delivered": False,
+                "already": "awaiting_signoff",
+            }
+        if started.get("already") == "completed":
+            return {
+                "task_id": task_id,
+                "title": started.get("task_title"),
+                "output": "",
+                "execution_code": started.get("execution_code"),
+                "discord_delivered": False,
+                "already": "completed",
+            }
+        execution_code = str(started["execution_code"])
+        try:
+            return await self.delegate_task(
+                task_id, instruction, execution_code=execution_code
+            )
+        except ExecutionSubAgentError as exc:
+            await self.delegations.mark_failed(execution_code, exc.code)
+            raise
+
+    async def approve_execution(self, execution_code: str) -> dict[str, object]:
+        return await self.delegations.approve_execution(
+            execution_code,
+            actor_id=self.settings.owner_switch_participant_id,
+            domain=self.domain,
+        )
 
     async def _handle_message(self, event: MessageEvent) -> str:
         if self.orchestrator is None:
@@ -380,7 +460,41 @@ class ZaskyApp:
                     "I cannot accept conversational approvals. Please reply with "
                     f"`approve {code}` to lock this in."
                 )
+        delegation_offer = await self._maybe_offer_delegation(
+            event.data.payload.body
+        )
+        if delegation_offer is not None:
+            return delegation_offer
         return await self.orchestrator.handle_message(event)
+
+    async def _maybe_offer_delegation(self, text: str) -> str | None:
+        """Create a deterministic delegation proposal when the owner is stuck."""
+        if not self.delegations.looks_like_trigger(text):
+            return None
+        task = await self.delegations.find_task_from_text(text)
+        if task is None:
+            return None
+        try:
+            proposal = await self.delegations.propose(str(task["id"]))
+        except DomainError:
+            return None
+        title = _escape_md(str(task["title"]))
+        if proposal["status"] == "awaiting_signoff" and proposal["execution_code"]:
+            return (
+                f"The execution for **{title}** is already ready. "
+                f"Reply `approve execution {proposal['execution_code']}` "
+                "to mark it complete."
+            )
+        if proposal["status"] == "running":
+            return (
+                f"The execution for **{title}** is already running. "
+                "I will post the deliverable in `#ai-workspace` when it is ready."
+            )
+        return (
+            f"You don't have time for **{title}**. Should I delegate this to "
+            "the Execution Agent? Reply "
+            f"`delegate {proposal['code']}`."
+        )
 
     async def _recent_room_history(self) -> list[dict[str, object]]:
         context = await self.ops.read_context(limit=20)
@@ -424,6 +538,10 @@ class ZaskyApp:
     async def _handle_approval(
         self, command: ApprovalCommand, event: MessageEvent
     ) -> tuple[str, str]:
+        if command.action == "delegate":
+            return await self._handle_delegate_command(command, event)
+        if command.action == "approve_execution":
+            return await self._handle_execution_approval(command, event)
         try:
             result = await self.domain.resolve_proposal(
                 action=command.action,
@@ -467,6 +585,119 @@ class ZaskyApp:
             )
         return (
             f"ℹ️ **Resolved** `{code}`\n\nNo further changes were made.",
+            "approval_applied",
+        )
+
+    async def _handle_delegate_command(
+        self, command: ApprovalCommand, event: MessageEvent
+    ) -> tuple[str, str]:
+        if command.code is None:
+            return ("A delegation code is required. Nothing changed.", "failed")
+        if self.execution is None:
+            return (
+                "The Execution Agent needs a configured model. Nothing changed.",
+                "failed",
+            )
+        try:
+            started = await self.delegations.start(
+                command.code, actor_id=event.data.payload.sender
+            )
+        except DomainError as exc:
+            return (
+                f"⚠️ **Not started**\n\n{exc.message}\n\n"
+                f"*Code: `{exc.code}`*",
+                "failed",
+            )
+        if started.get("already") == "completed":
+            return (
+                f"ℹ️ **Already completed** `{command.code}`\n\n"
+                "No further changes were made.",
+                "approval_applied",
+            )
+        if started.get("already") == "running":
+            return (
+                f"ℹ️ **Execution already running** `{command.code}`\n\n"
+                "I will post the deliverable in `#ai-workspace`.",
+                "approval_applied",
+            )
+        if started.get("already") == "awaiting_signoff":
+            code = str(started.get("execution_code") or "ZK-????")
+            return (
+                f"ℹ️ **Execution already ready** `{code}`\n\n"
+                "Review the deliverable in `#ai-workspace` and reply "
+                f"`approve execution {code}` to mark the task complete.",
+                "approval_applied",
+            )
+        execution_code = str(started["execution_code"])
+        task_id = str(started["task_id"])
+        task_title = _escape_md(str(started["task_title"]))
+        try:
+            result = await self.delegate_task(
+                task_id, execution_code=execution_code
+            )
+        except ExecutionSubAgentError as exc:
+            await self.delegations.mark_failed(execution_code, exc.code)
+            return (
+                f"⚠️ **Execution failed** `{execution_code}`\n\n"
+                f"{exc.message}\n\nNothing changed.",
+                "failed",
+            )
+        if not result.get("discord_delivered"):
+            fallback = self._execution_signoff(
+                str(result["output"]), execution_code
+            )
+            try:
+                await self.ops.post_message(fallback)
+            except Exception:
+                logger.exception(
+                    "Execution fallback post failed",
+                    extra={
+                        "component": "delegation",
+                        "error_code": "EXECUTION_FALLBACK_FAILED",
+                    },
+                )
+        destination = (
+            "`#ai-workspace`"
+            if result.get("discord_delivered")
+            else "this room (workspace delivery failed)"
+        )
+        return (
+            f"✅ **Execution ready** `{execution_code}`\n\n"
+            f"The structured deliverable for **{task_title}** is in "
+            f"{destination}.\n\n"
+            "Review it and reply "
+            f"`approve execution {execution_code}` to mark the task complete.",
+            "approval_applied",
+        )
+
+    async def _handle_execution_approval(
+        self, command: ApprovalCommand, event: MessageEvent
+    ) -> tuple[str, str]:
+        if command.code is None:
+            return ("An execution code is required. Nothing changed.", "failed")
+        try:
+            result = await self.delegations.approve_execution(
+                command.code,
+                actor_id=event.data.payload.sender,
+                domain=self.domain,
+            )
+        except DomainError as exc:
+            return (
+                f"⚠️ **Not completed**\n\n{exc.message}\n\n"
+                f"*Code: `{exc.code}`*",
+                "failed",
+            )
+        if result.get("already") == "completed":
+            return (
+                f"ℹ️ **Already approved** `{command.code}`\n\n"
+                "The task was already complete.",
+                "approval_applied",
+            )
+        title = _escape_md(str(result.get("task_title") or "Task"))
+        return (
+            f"✅ **Execution approved** `{command.code}`\n\n"
+            f"**Task:** {title}\n"
+            "The task is marked complete.",
             "approval_applied",
         )
 

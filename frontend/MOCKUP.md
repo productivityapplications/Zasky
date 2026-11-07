@@ -1,6 +1,6 @@
 # Zasky Dashboard — Visual Mockup
 
-**Status:** proposed redesign, awaiting approval.  
+**Status:** approved and implemented in the Tailwind dashboard.  
 **Reference:** `docs/zasky-reference.webp`  
 **Constraint:** no final React/Tailwind implementation yet. This document defines the intended layout, palette, hierarchy and class recipes.
 

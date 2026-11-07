@@ -67,12 +67,17 @@ async def test_execution_subagent_produces_bounded_output(settings: Settings) ->
         },
         instruction="Make it 90 seconds long.",
     )
-    assert result["output"].startswith("Draft deliverable")
+    assert result["output"].startswith("## 1. The Deliverable")
+    assert "## 2. What I Did" in result["output"]
+    assert "## 3. Verification Checklist" in result["output"]
+    assert "Draft deliverable: first section." in result["output"]
     assert result["prompt_tokens"] == 120
     assert cost.checked == 1
     assert len(cost.recorded) == 1
     assert len(llm.messages) == 2
     assert "Execution Sub-Agent" in llm.messages[0]["content"]
+    assert "## 1. The Deliverable" in llm.messages[0]["content"]
+    assert "browse" in llm.messages[0]["content"]
     assert "Draft the demo script" in llm.messages[1]["content"]
     assert "Make it 90 seconds long." in llm.messages[1]["content"]
 

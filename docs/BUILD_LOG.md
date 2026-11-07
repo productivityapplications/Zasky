@@ -1,5 +1,25 @@
 # Zasky Build Log
 
+## 2026-11-07 — Tailwind redesign and human-in-the-loop delegation
+
+- Replaced the legacy dark dashboard with the approved three-column Tailwind
+  design: yellow navigation rail, light calendar workspace, dark All Tasks
+  queue, and real-data analytics dock.
+- Added Tailwind CSS/PostCSS/autoprefixer, Manrope, shared UI primitives and
+  componentized PlanView, TaskQueuePanel, ReconciliationView, AnalyticsDock,
+  WorkspaceHeader, NavigationRail and modals.
+- Added the `delegation_proposals` table and migration `526c14430d14`.
+- Added deterministic `delegate ZK-XXXX` and `approve execution ZK-YYYY`
+  commands. The model has no eighth tool; all state transitions are application
+  code.
+- Updated the Execution Sub-Agent prompt to allow only copy, code snippets,
+  plans and document formatting, and to always return the three required
+  Markdown sections.
+- Updated the dashboard delegate modal to Confirm Delegation → structured
+  output → Approve Execution & Complete Task.
+- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Neon schema migrated to `526c14430d14`.
+
 ## 2026-11-07 — Calendar feed and Google Calendar links
 
 - Added a dynamic iCalendar feed from Postgres covering active fixed events and

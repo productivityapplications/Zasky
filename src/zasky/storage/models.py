@@ -350,6 +350,45 @@ class ReminderDispatch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class DelegationProposal(Base):
+    __tablename__ = "delegation_proposals"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','awaiting_signoff','completed',"
+            "'rejected','expired','failed')",
+            name="ck_delegation_status",
+        ),
+        Index("ix_delegation_status_expiry", "status", "expires_at"),
+        Index("ix_delegation_task_status", "task_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    code: Mapped[str] = mapped_column(String(12), unique=True, nullable=False)
+    task_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("week_tasks.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending"
+    )
+    execution_code: Mapped[str | None] = mapped_column(
+        String(12), unique=True
+    )
+    output_markdown: Mapped[str | None] = mapped_column(Text)
+    error_code: Mapped[str | None] = mapped_column(String(60))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    resolution_actor: Mapped[str | None] = mapped_column(String(240))
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
     __table_args__ = (
@@ -512,6 +551,7 @@ ALL_MODELS: tuple[Any, ...] = (
     PlanningScopeRevision,
     ReminderDispatch,
     AuditEvent,
+    DelegationProposal,
     ModelUsageRecord,
     AlarmDispatch,
     TimeboxCheckin,

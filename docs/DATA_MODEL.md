@@ -293,3 +293,26 @@ Proactive task-start alarm dedupe for approved day-plan items.
 Unique `(day_plan_item_id, scheduled_start_utc)` prevents duplicate alarms across
 scheduler ticks or restarts. Index `(status, scheduled_start_utc)`. The scheduler
 posts through Switch `post_message`, never a direct Discord API.
+
+## 18. `delegation_proposals`
+
+Human-in-the-loop delegation records for the Execution Sub-Agent.
+
+| Field | Type | Required | Rules |
+|---|---|---:|---|
+| `id` | UUID TEXT | Yes | PK |
+| `code` | TEXT | Yes | Unique owner-facing proposal code (`ZK-XXXX`) |
+| `task_id` | UUID TEXT | Yes | FK `week_tasks.id` RESTRICT |
+| `status` | TEXT | Yes | `pending`, `running`, `awaiting_signoff`, `completed`, `rejected`, `expired`, `failed` |
+| `execution_code` | TEXT | No | Unique second code for owner sign-off (`ZK-YYYY`) |
+| `output_markdown` | TEXT | No | Structured three-section sub-agent deliverable |
+| `error_code` | TEXT | No | Bounded failure code |
+| `created_at` | DATETIME | Yes | UTC |
+| `expires_at` | DATETIME | Yes | Pending delegation TTL |
+| `resolved_at` | DATETIME | No | UTC |
+| `resolution_actor` | TEXT | No | Owner actor ID |
+
+The table is written by deterministic application code, never by the model.
+`delegate ZK-XXXX` moves a pending record to `running` and creates the execution
+code. The sub-agent output moves it to `awaiting_signoff`. Only
+`approve execution ZK-YYYY` completes the task and marks the record `completed`.

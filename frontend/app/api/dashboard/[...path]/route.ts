@@ -18,6 +18,7 @@ const ALLOWED_ROOTS = new Set([
   "goals",
   "commitments",
   "delegate",
+  "executions",
   "calendar.ics",
 ]);
 const SAFE_SEGMENT = /^[A-Za-z0-9.-]+$/;

@@ -20,6 +20,9 @@ endpoint reports ready.
   service.
 - **Calendar** is available as a dynamic `.ics` feed with task alarms, Google
   Calendar quick-add links on task rows, and a Daily Briefing calendar link.
+- **Execution delegation** is a two-step owner workflow: `delegate ZK-XXXX` runs
+  the bounded Execution Agent, and `approve execution ZK-YYYY` completes the
+  task only after the owner reviews the three-section deliverable.
 - **Dashboard API** is token-gated on port `8100`; port `8000` is used by Switch.
 - **Model** is OpenRouter `openai/gpt-4o-mini` via Chat Completions with
   `provider.sort=throughput`, a 600-token cap and hard $20/month,

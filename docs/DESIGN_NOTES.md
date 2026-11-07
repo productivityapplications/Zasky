@@ -174,6 +174,14 @@ This does **not** replace Switch:
 `scripts/setup_discord.py` also uses Discord REST directly, as requested, and is
 not executed by the agent.
 
+### Dashboard visual system (2026-11-07)
+
+The operator approved the reference-driven three-column design in
+`frontend/MOCKUP.md`. The implementation uses Tailwind CSS with a lemon
+navigation rail, light calendar workspace, dark All Tasks queue and real-data
+analytics dock. No fake progress or team data was introduced. The full class
+recipes and responsive behavior remain documented in `frontend/MOCKUP.md`.
+
 ### Calendar integration (2026-11-07)
 
 The calendar surface is read-only:

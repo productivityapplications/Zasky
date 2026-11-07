@@ -35,6 +35,9 @@ Test pure domain behavior without Switch or a model:
   provider-failure handling.
 - iCalendar feed contents, VALARM lead time, stable event UIDs, Google Calendar
   quick-add URLs and bearer/feed-token calendar access.
+- Delegation proposal lifecycle, deterministic `delegate` and
+  `approve execution` parsing, structured sub-agent output, and task completion
+  only after owner sign-off.
 
 ## End-to-end tests
 1. Add year goal → add monthly commitment → create weekly tasks → approve week.
@@ -61,7 +64,7 @@ Test pure domain behavior without Switch or a model:
 ## Final staging evidence — 2026-11-07
 
 ```bash
-uv run pytest -q                 # 151 passed
+uv run pytest -q                 # 158 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 cd frontend && npm run build     # Next.js production build succeeds

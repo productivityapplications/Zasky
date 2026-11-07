@@ -47,11 +47,16 @@ class FakePublisher:
         self.delegate_result = {
             "task_id": "task-1",
             "title": "Polish the dashboard",
-            "output": "Draft deliverable from the sub-agent.",
+            "output": (
+                "## 1. The Deliverable\n\nDraft deliverable from the sub-agent.\n\n"
+                "## 2. What I Did\n\nDrafted.\n\n"
+                "## 3. Verification Checklist\n\n- [ ] Review."
+            ),
             "model": "openai/gpt-4o-mini",
             "prompt_tokens": 100,
             "completion_tokens": 50,
             "discord_delivered": True,
+            "execution_code": "ZK-EXEC",
         }
 
     async def publish_execution_result(
@@ -69,6 +74,19 @@ class FakePublisher:
         if self.delegate_error is not None:
             raise self.delegate_error
         return {**self.delegate_result, "task_id": task_id}
+
+    async def delegate_from_dashboard(
+        self, task_id: str, instruction: str | None = None
+    ) -> dict[str, Any]:
+        return await self.delegate_task(task_id, instruction)
+
+    async def approve_execution(self, execution_code: str) -> dict[str, Any]:
+        return {
+            "task_id": "task-1",
+            "task_title": "Polish the dashboard",
+            "status": "completed",
+            "already": None,
+        }
 
 
 async def approve(service: DomainService, result: dict) -> dict:
@@ -165,6 +183,8 @@ async def dashboard_env(tmp_path, settings: Settings):
             domain=domain,
             publish_execution_result=publisher.publish_execution_result,
             delegate_task=publisher.delegate_task,
+            delegate_from_dashboard=publisher.delegate_from_dashboard,
+            approve_execution=publisher.approve_execution,
         )
         api = create_dashboard_app(fake_app)  # type: ignore[arg-type]
         yield api, db, domain, publisher
@@ -433,7 +453,8 @@ async def test_delegate_returns_execution_output(dashboard_env) -> None:
             json={"instruction": "Make it concise."},
         )
         assert response.status_code == 200
-        assert response.json()["output"].startswith("Draft deliverable")
+        assert response.json()["output"].startswith("## 1. The Deliverable")
+        assert response.json()["execution_code"] == "ZK-EXEC"
         assert publisher.delegate_calls == [
             {"task_id": task["id"], "instruction": "Make it concise."}
         ]
@@ -495,3 +516,15 @@ async def test_task_payloads_include_google_calendar_links(dashboard_env) -> Non
         tasks = listing.json()["tasks"]
         assert tasks
         assert all(task["google_calendar_url"] for task in tasks)
+
+
+@pytest.mark.asyncio
+async def test_execution_approval_completes_task(dashboard_env) -> None:
+    api, _db, _domain, _publisher = dashboard_env
+    async with client(api) as http:
+        response = await http.post(
+            "/api/dashboard/executions/ZK-EXEC/approve"
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+        assert response.json()["task_id"] == "task-1"

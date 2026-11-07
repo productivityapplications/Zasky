@@ -252,13 +252,15 @@ approving records.
 | `GET` | `/api/dashboard/commitments` | Month commitments with linked goal titles |
 | `POST` | `/api/dashboard/commitments` | Create a month commitment, optionally linked to a goal |
 | `POST` | `/api/dashboard/tasks` | Add a task to the current week pool; links a commitment or creates an ad hoc task |
-| `POST` | `/api/dashboard/delegate/{task_id}` | Run the bounded Execution Sub-Agent for one task |
+| `POST` | `/api/dashboard/delegate/{task_id}` | Start the two-step Execution Sub-Agent flow and return its structured output plus execution code |
+| `POST` | `/api/dashboard/executions/{execution_code}/approve` | Owner sign-off that marks the delegated task complete in Postgres |
 
 Goal and commitment creation uses `propose_record` followed by the same
 deterministic `resolve_proposal` path as chat. Task creation uses
 `DomainService.add_week_task`, which appends to an existing placement instead of
 creating a duplicate placement. Delegation uses a tool-free LLM call with the
-existing cost guard and does not mutate planning state.
+existing cost guard and does not mutate planning state until the owner approves
+the execution code.
 
 ```json
 {
@@ -279,17 +281,25 @@ Delegate response:
   "ok": true,
   "task_id": "task-uuid",
   "title": "Draft the demo script",
-  "output": "Draft deliverable …",
+  "output": "## 1. The Deliverable\n\n…\n\n## 2. What I Did\n\n…\n\n## 3. Verification Checklist\n\n- [ ] …",
   "model": "openai/gpt-4o-mini",
   "prompt_tokens": 420,
   "completion_tokens": 180,
-  "discord_delivered": true
+  "discord_delivered": true,
+  "execution_code": "ZK-9K2M"
 }
 ```
 
-The sub-agent result is also posted to `#ai-workspace` when configured. The
-task remains unchanged; the dashboard cannot approve plans or mutate scheduling
-through delegation.
+The sub-agent result is posted to `#ai-workspace` with an appended sign-off
+prompt. The task is **not** completed until:
+
+```http
+POST /api/dashboard/executions/ZK-9K2M/approve
+Authorization: Bearer <DASHBOARD_API_KEY>
+```
+
+or the owner sends `approve execution ZK-9K2M` in Discord. Both paths use the
+same deterministic delegation record and `DomainService.complete_task`.
 
 ### Calendar feed and Google Calendar links
 

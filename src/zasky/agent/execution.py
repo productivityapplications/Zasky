@@ -31,15 +31,36 @@ class ExecutionSubAgentError(RuntimeError):
 
 _SYSTEM_PROMPT = """You are Zasky's Execution Sub-Agent.
 
-Work on exactly one owner-selected task. Produce a directly usable deliverable
-such as a draft, outline, checklist, or concrete next-step breakdown. Use only
-the task details and owner instruction supplied. Do not invent new tasks, do
-not claim to have performed external actions, do not request approval, and do
-not expose secrets or private identifiers. If the task is ambiguous, state the
-smallest clarification needed and still make the most useful safe assumption.
+You may only:
+- draft copy;
+- write code snippets;
+- outline plans;
+- format documents.
 
-Return plain text suitable for display in the owner dashboard. Keep it concise
-and structured."""
+You cannot browse the web, access external services, modify a database, send
+messages, run commands, or read secrets. Never claim to have done any of those
+things. Work on exactly one owner-selected task, use only the task details and
+owner instruction supplied, and do not invent new tasks or approvals.
+
+ALWAYS return structured Markdown with exactly these three second-level
+headings, in this order:
+
+## 1. The Deliverable
+
+The directly usable draft, snippet, outline, or formatted document.
+
+## 2. What I Did
+
+A short factual description of the work you performed. Do not claim external
+actions.
+
+## 3. Verification Checklist
+
+- [ ] A concrete check the owner can perform.
+- [ ] Another concrete check where useful.
+
+If the task is ambiguous, state the smallest clarification needed inside the
+deliverable and still make the most useful safe assumption."""
 _USER_PROMPT = """Task: {title}
 Estimate: {est_min} minutes
 Scheduled: {scheduled_date}
@@ -49,7 +70,29 @@ Status: {status}
 Owner instruction:
 {instruction}
 
-Produce the deliverable now."""
+Produce the deliverable now using the required three-section Markdown format."""
+
+
+def ensure_structured_output(output: str) -> str:
+    """Guarantee the two-step UI can always render the three required sections."""
+    required = (
+        "## 1. The Deliverable",
+        "## 2. What I Did",
+        "## 3. Verification Checklist",
+    )
+    normalized = output.strip()
+    if all(marker in normalized for marker in required):
+        return normalized
+    return (
+        f"{required[0]}\n\n{normalized}\n\n"
+        f"{required[1]}\n\n"
+        "The sub-agent produced the deliverable above from the supplied task "
+        "details. No external tools or database changes were used.\n\n"
+        f"{required[2]}\n\n"
+        "- [ ] Review the deliverable for accuracy and tone.\n"
+        "- [ ] Confirm it matches the task scope.\n"
+        "- [ ] Approve execution or request a revision."
+    )
 
 
 class ExecutionSubAgent:
@@ -111,7 +154,7 @@ class ExecutionSubAgent:
             ) from exc
 
         await self._cost.record(response, correlation_id=correlation_id)
-        output = response.content.strip()
+        output = ensure_structured_output(response.content.strip())
         if not output:
             raise ExecutionSubAgentError(
                 "EXECUTION_EMPTY",

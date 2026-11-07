@@ -78,10 +78,36 @@ for building the planning cascade directly in the UI. Existing goals and
 commitments appear in the modal selectors. Created tasks enter the current week
 pool immediately and are readable by Zasky in Discord.
 
-On incomplete tasks, **⚡ Delegate to AI** runs the bounded Execution Sub-Agent.
-The modal shows a loading state, then the draft or checklist output. The task
-itself is not changed, and the result is also posted to `#ai-workspace` when
-configured.
+On incomplete tasks, **⚡ Delegate to AI** starts the two-step execution flow:
+
+1. **Confirm Delegation** runs the bounded Execution Sub-Agent. It can only
+   draft copy, write code snippets, outline plans and format documents. It
+   cannot browse, modify the database or approve its own work.
+2. The modal renders the three-section output: **The Deliverable**, **What I
+   Did** and **Verification Checklist**.
+3. **✅ Approve Execution & Complete Task** is the sign-off. Only then is the
+   task marked complete in Postgres.
+
+The result is also posted to `#ai-workspace`.
+
+In Discord, when you say you cannot do a task or a task is at risk, Zasky
+creates a delegation proposal:
+
+```text
+You don't have time for [Task]. Should I delegate this to the Execution Agent?
+Reply `delegate ZK-XXXX`.
+```
+
+After the exact `delegate ZK-XXXX` command, the Execution Agent posts the
+structured deliverable to `#ai-workspace` and appends:
+
+```text
+Please review the deliverable above. If this meets your standards, reply
+`approve execution ZK-YYYY` to mark the task complete.
+```
+
+Only `approve execution ZK-YYYY` marks the task complete. Natural language such
+as "looks good" does not.
 
 The dashboard writes to the same Neon Postgres database as chat. A checkbox is an
 explicit owner completion, not a model action. The dashboard token stays on the
