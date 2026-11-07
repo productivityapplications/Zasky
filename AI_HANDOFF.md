@@ -48,7 +48,7 @@
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
 | Deployed commit | `0f2bd14` (Discord routing code; channel IDs pending operator setup) |
-| Current Git commit | `0f2bd14` |
+| Current Git commit | `3b53c9b` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 136 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write; Discord notifier routing tests |
@@ -249,9 +249,10 @@
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
    enforces exact owner and room checks, but `@everyone → View Channel = deny`
    must be applied before real personal use or a public demo.
-2. **Discord channel IDs:** the setup script creates the channels, but the
-   backend routes stay on fallback until the operator adds `DISCORD_BOT_TOKEN`
-   and the printed channel IDs to the protected env and restarts Zasky.
+2. **Discord setup credentials:** `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID`
+   are not present in `/root/Zasky-secrets/zasky.env`, so the reviewed setup
+   script cannot be executed yet. Add them to the protected env, run the script,
+   then add the printed channel IDs and restart Zasky.
 3. **Plain HTTP:** the dashboard API is reachable on port 8100 over HTTP for the
    hackathon. The bearer token crosses the network; use HTTPS and rotate the
    token for real personal data.
