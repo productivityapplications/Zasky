@@ -18,8 +18,9 @@ const ALLOWED_ROOTS = new Set([
   "goals",
   "commitments",
   "delegate",
+  "calendar.ics",
 ]);
-const SAFE_SEGMENT = /^[A-Za-z0-9-]+$/;
+const SAFE_SEGMENT = /^[A-Za-z0-9.-]+$/;
 
 function jsonError(detail: string, status: number): NextResponse {
   return NextResponse.json({ detail }, { status });
@@ -80,6 +81,8 @@ async function forward(
     headers: {
       "Content-Type":
         upstream.headers.get("content-type") ?? "application/json",
+      "Content-Disposition":
+        upstream.headers.get("content-disposition") ?? "inline",
       "Cache-Control": "no-store",
     },
   });

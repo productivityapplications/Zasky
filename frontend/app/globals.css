@@ -1490,3 +1490,26 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+.calendar-link {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  height: 26px;
+  justify-content: center;
+  text-decoration: none;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 120ms ease;
+  width: 26px;
+}
+
+.calendar-link:hover {
+  background: var(--cyan-soft);
+  border-color: rgba(120, 215, 255, 0.35);
+  transform: translateY(-1px);
+}

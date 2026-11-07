@@ -45,6 +45,8 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `DISCORD_BOT_TOKEN` | For Discord routing | Bot token used only for outbound application notifications | Secret; server-only; same bot as Switch's Discord bridge |
 | `DISCORD_GUILD_ID` | Setup script only | Target Discord server ID | Not needed by the runtime |
 | `DISCORD_API_BASE_URL` | No | Discord REST base URL | Default `https://discord.com/api/v10`; server-only |
+| `CALENDAR_FEED_TOKEN` | Optional | Read-only token for direct `.ics` subscription URLs | Secret; query `?token=`; dashboard bearer auth also works |
+| `CALENDAR_ALARM_MINUTES` | No | VALARM lead time for day-plan tasks | Default `5`; 0–120 |
 | `DISCORD_DAILY_BRIEFINGS_CHANNEL_ID` | For Daily Briefing routing | Destination for approved `plan_day` briefings | Discord snowflake; `#daily-briefings` |
 | `DISCORD_RECONCILE_ALERTS_CHANNEL_ID` | For recovery routing | Destination for approved `reconcile` summaries | Discord snowflake; `#reconcile-alerts` |
 | `DISCORD_AI_WORKSPACE_CHANNEL_ID` | For execution results | Destination for Execution Sub-Agent results | Discord snowflake; `#ai-workspace` |

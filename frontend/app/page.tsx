@@ -23,6 +23,7 @@ type DashboardTask = {
   completed_at: string | null;
   week_start: string | null;
   commitment_title: string | null;
+  google_calendar_url: string | null;
 };
 
 type TodayItem = DashboardTask & {
@@ -678,6 +679,18 @@ function TaskRow({
         <div className="task-title-line">
           <h3>{task.title}</h3>
           <div className="task-side">
+            {task.google_calendar_url ? (
+              <a
+                className="calendar-link"
+                href={task.google_calendar_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Add ${task.title} to Google Calendar`}
+                title="Add to Google Calendar"
+              >
+                📅
+              </a>
+            ) : null}
             <StatusPill status={task.status} />
             {delegatable ? (
               <button
@@ -720,7 +733,21 @@ function PlanItem({
       <div className="plan-body">
         <div className="task-title-line">
           <h3>{item.title}</h3>
-          <StatusPill status={completed ? "completed" : item.status} />
+          <div className="task-side">
+            <StatusPill status={completed ? "completed" : item.status} />
+            {item.google_calendar_url ? (
+              <a
+                className="calendar-link"
+                href={item.google_calendar_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Add ${item.title} to Google Calendar`}
+                title="Add to Google Calendar"
+              >
+                📅
+              </a>
+            ) : null}
+          </div>
         </div>
         <div className="plan-time">
           <ClockIcon />
@@ -1075,6 +1102,14 @@ export default function DashboardPage() {
             >
               + Add Task
             </button>
+            <a
+              className="ghost-button"
+              href="/api/dashboard/calendar.ics"
+              target="_blank"
+              rel="noreferrer"
+            >
+              📅 Sync to Calendar
+            </a>
           </div>
         </section>
 

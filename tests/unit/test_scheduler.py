@@ -155,6 +155,9 @@ async def test_briefing_is_formatted_and_has_fixed_events(tmp_path, settings: Se
         assert "**FIXED:**" in briefing
         assert "📍 **Synthetic family dinner** — 06:00 PM–07:30 PM" in briefing
         assert "⏰ **Latest Wake:** 08:30 AM" in briefing
+        assert "📅 **Add to Google Calendar:**" in briefing
+        assert "calendar.google.com/calendar/render" in briefing
+        assert "action=TEMPLATE" in briefing
     finally:
         await db.close()
         await asyncio.sleep(0.2)

@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-07  
-**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed two-way Vercel dashboard, active Discord HQ routing and a bounded Execution Sub-Agent  
+**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed two-way Vercel dashboard, active Discord HQ routing, a bounded Execution Sub-Agent and a dynamic calendar feed  
 **Current phase:** Post-Phase 9 cloud/dashboard upgrade — verified staging, awaiting authorized release  
-**Next task:** Test New Goal, New Commitment, Add Task and Delegate to AI from the deployed Vercel UI, then apply the Discord room privacy setting.
+**Next task:** Redeploy the Vercel frontend, subscribe to the calendar feed, then apply the Discord room privacy setting.
 
 ## Current state
 
@@ -47,11 +47,11 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | `a3b375f` (two-way dashboard + Execution Sub-Agent) |
-| Current Git commit | `a3b375f` plus docs checkpoint |
+| Deployed commit | Pending push of calendar release commit |
+| Current Git commit | Pending calendar release commit |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
-| Unit/integration/E2E evidence | 145 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
+| Unit/integration/E2E evidence | 151 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -274,7 +274,7 @@
   task-pool "⚡ Delegate to AI" flow with loading, error and output states.
 - Extended the Next.js proxy allowlist and delegation timeout. `npm run build`
   is clean.
-- Tests: **145 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **151 passed**; `ruff check .` clean; `mypy src` clean.
 - Live reads through the Vercel proxy shape returned 3 goals, 3 commitments and
   8 tasks from Neon. Delegation of a missing task returned `404` without
   invoking the model.
@@ -282,6 +282,25 @@
   Neon warmed; a normal restart restored 1–2 second reads. Health stayed green
   and no model or planning action occurred during the warm-up.
 - Every dashboard write targets the same Neon database Zasky reads in Discord.
+
+## Calendar integration (2026-11-07)
+
+- Added `GET /api/dashboard/calendar.ics`, a dynamic iCalendar feed built from
+  active fixed events and approved day-plan tasks in Postgres.
+- Each task VEVENT has a `VALARM` display trigger controlled by
+  `CALENDAR_ALARM_MINUTES` (default 5). Fixed events are included without alarms.
+- Added stable task/event UIDs, RFC 5545 escaping, line folding, refresh hints
+  and UTC event times.
+- Auth accepts the dashboard bearer token or `?token=CALENDAR_FEED_TOKEN` for
+  direct calendar subscriptions.
+- Added Google Calendar quick-add URL utilities. Task payloads from today,
+  tasks and reconciliation history now include `google_calendar_url`; the Daily
+  Briefing appends an all-day Google Calendar link.
+- Added the dashboard **📅 Sync to Calendar** button and per-task 📅 links.
+- Live Neon feed check: 9 VEVENTs, 6 task alarms, fixed events present.
+- Tests: **151 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- The feed is available through the Vercel proxy with the dashboard token; the
+  optional direct VPS URL uses `?token=`.
 
 ## Known issues and blockers
 

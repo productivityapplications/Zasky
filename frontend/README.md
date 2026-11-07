@@ -115,6 +115,17 @@ curl -fsS \
 
 Expected: JSON with `date`, `has_plan`, `must`, `should` and `fixed_events`.
 
+## Calendar subscription
+
+The **📅 Sync to Calendar** button points to `/api/dashboard/calendar.ics`
+through the same-origin proxy. The feed contains active fixed events and approved
+day-plan tasks, with a VALARM before each task. Subscribe to the deployed
+`https://YOUR-VERCEL-APP.vercel.app/api/dashboard/calendar.ics` URL in Google
+Calendar under **Other calendars → From URL**.
+
+If you prefer a direct VPS subscription, set `CALENDAR_FEED_TOKEN` on the backend
+and use the direct URL with `?token=...`. Keep that URL private.
+
 ## Delegation duration
 
 The `/api/dashboard/delegate/{task_id}` route keeps the browser request open

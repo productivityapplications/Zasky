@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 import pytest_asyncio
+from pydantic import SecretStr
 
 from tests.fixtures.identities import OWNER_ID, ROOM_ID
 from zasky.agent.execution import ExecutionSubAgentError
@@ -86,6 +87,7 @@ async def dashboard_env(tmp_path, settings: Settings):
             "database_url": f"sqlite+aiosqlite:///{tmp_path / 'dashboard.db'}",
             "dashboard_api_key": TOKEN,
             "dashboard_cors_origins": "*",
+            "calendar_feed_token": SecretStr("calendar-test-token"),
             "timezone": "Africa/Lagos",
             "weekly_availability_json": AVAILABILITY,
         }
@@ -447,3 +449,49 @@ async def test_delegate_conflict_is_reported(dashboard_env) -> None:
         response = await http.post("/api/dashboard/delegate/task-1")
         assert response.status_code == 409
         assert "cannot be delegated" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_calendar_feed_accepts_feed_token_and_bearer(dashboard_env) -> None:
+    api, _db, _domain, _publisher = dashboard_env
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=api),
+        base_url="http://dashboard.test",
+    ) as anonymous:
+        missing = await anonymous.get("/api/dashboard/calendar.ics")
+        assert missing.status_code == 401
+        wrong = await anonymous.get(
+            "/api/dashboard/calendar.ics?token=wrong"
+        )
+        assert wrong.status_code == 401
+        feed = await anonymous.get(
+            "/api/dashboard/calendar.ics?token=calendar-test-token"
+        )
+        assert feed.status_code == 200
+        assert feed.headers["content-type"].startswith("text/calendar")
+        body = feed.text
+        assert body.startswith("BEGIN:VCALENDAR")
+        assert "SUMMARY:Polish the dashboard" in body
+        assert "SUMMARY:Synthetic review" in body
+        assert "BEGIN:VALARM" in body
+        assert "TRIGGER:-PT5M" in body
+
+    async with client(api) as http:
+        bearer = await http.get("/api/dashboard/calendar.ics")
+        assert bearer.status_code == 200
+        assert "BEGIN:VCALENDAR" in bearer.text
+
+
+@pytest.mark.asyncio
+async def test_task_payloads_include_google_calendar_links(dashboard_env) -> None:
+    api, _db, _domain, _publisher = dashboard_env
+    async with client(api) as http:
+        today = await http.get("/api/dashboard/today?date=2026-11-06")
+        item = today.json()["must"][0]
+        assert "calendar.google.com/calendar/render" in item["google_calendar_url"]
+        assert "action=TEMPLATE" in item["google_calendar_url"]
+
+        listing = await http.get("/api/dashboard/tasks")
+        tasks = listing.json()["tasks"]
+        assert tasks
+        assert all(task["google_calendar_url"] for task in tasks)

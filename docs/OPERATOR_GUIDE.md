@@ -88,6 +88,12 @@ explicit owner completion, not a model action. The dashboard token stays on the
 Vercel server. Do not share the Vercel URL publicly or put the token in a browser
 variable.
 
+**📅 Sync to Calendar** opens the dynamic iCalendar feed. Subscribe to it in
+Google Calendar under **Other calendars → From URL** to receive fixed events and
+approved day-plan tasks with a 5-minute display alarm. Each task also has a small
+📅 quick-add link, and the Discord Daily Briefing ends with an all-day Google
+Calendar link for the plan.
+
 ## Staging configuration (2026-11-07)
 
 - Timezone: Africa/Lagos.

@@ -97,6 +97,24 @@ or security group must allow `8100/tcp` too.
 For real personal use, terminate TLS in front of port 8100 and use the HTTPS URL
 in Vercel. Rotate `DASHBOARD_API_KEY` after the demo.
 
+## Calendar feed
+
+The Vercel dashboard's **📅 Sync to Calendar** button points at the same-origin
+`/api/dashboard/calendar.ics` proxy, which authenticates to the VPS with the
+dashboard token. Google Calendar can subscribe to that Vercel URL
+(**Other calendars → From URL**).
+
+For a direct VPS subscription URL, set a separate `CALENDAR_FEED_TOKEN` in the
+protected env and use:
+
+```text
+http://YOUR_VPS_IP:8100/api/dashboard/calendar.ics?token=YOUR_FEED_TOKEN
+```
+
+The feed contains active fixed events and approved day-plan tasks. Each task has
+a display alarm `CALENDAR_ALARM_MINUTES` before its start (default 5). The
+dashboard bearer token also works for this route.
+
 ## Discord channel expansion
 
 The one-off `scripts/setup_discord.py` creates the Zasky HQ category and its five

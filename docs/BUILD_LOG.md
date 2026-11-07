@@ -1,5 +1,20 @@
 # Zasky Build Log
 
+## 2026-11-07 — Calendar feed and Google Calendar links
+
+- Added a dynamic iCalendar feed from Postgres covering active fixed events and
+  approved day-plan tasks. Task events include a `VALARM` display trigger
+  (`CALENDAR_ALARM_MINUTES`, default 5).
+- Added RFC 5545 escaping/folding, stable UIDs, UTC event times and subscription
+  refresh hints.
+- Added Google Calendar quick-add utilities. Task payloads include a quick-add
+  URL; the Daily Briefing appends an all-day Google Calendar link.
+- Added the dashboard **📅 Sync to Calendar** button and per-task 📅 links.
+- Auth accepts the dashboard bearer token, or `?token=CALENDAR_FEED_TOKEN` for a
+  direct subscription URL.
+- Live Neon feed check: 9 VEVENTs, 6 task alarms, fixed events included.
+- Tests: **151 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+
 ## 2026-11-07 — Two-way dashboard and Execution Sub-Agent
 
 - Added dashboard write endpoints for year goals, month commitments, week-pool
@@ -14,7 +29,7 @@
 - Added Next.js modal forms for New Goal, New Commitment and Add Task; added the
   task-pool delegate button with loading and output states.
 - Extended the Next.js proxy allowlist and timeout for delegation.
-- Tests: **145 passed**; `ruff check .` clean; `mypy src` clean; `npm run build`
+- Tests: **151 passed**; `ruff check .` clean; `mypy src` clean; `npm run build`
   clean.
 - All writes target the same Neon Postgres database that Zasky reads in Discord.
 

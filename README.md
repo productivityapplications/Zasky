@@ -18,6 +18,8 @@ endpoint reports ready.
 - **Dashboard** is in `frontend/` with Today's Plan, All Tasks and Reconciliation
   History. Checkbox completion writes through the same deterministic domain
   service.
+- **Calendar** is available as a dynamic `.ics` feed with task alarms, Google
+  Calendar quick-add links on task rows, and a Daily Briefing calendar link.
 - **Dashboard API** is token-gated on port `8100`; port `8000` is used by Switch.
 - **Model** is OpenRouter `openai/gpt-4o-mini` via Chat Completions with
   `provider.sort=throughput`, a 600-token cap and hard $20/month,

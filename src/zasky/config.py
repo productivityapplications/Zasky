@@ -126,6 +126,11 @@ class Settings(BaseSettings):
     discord_control_channel_id: str | None = None
     discord_dashboard_sync_channel_id: str | None = None
 
+    # Calendar integration. CALENDAR_FEED_TOKEN permits read-only calendar
+    # subscription URLs; dashboard bearer auth always works.
+    calendar_feed_token: SecretStr | None = None
+    calendar_alarm_minutes: int = Field(default=5, ge=0, le=120)
+
     # Owner dashboard API (Vercel). The token is mandatory; the public API is
     # never unauthenticated even though CORS is permissive for the demo.
     dashboard_bind_host: str = "0.0.0.0"

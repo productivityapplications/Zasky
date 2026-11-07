@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import func, select
@@ -20,6 +20,10 @@ from sqlalchemy import func, select
 from zasky.agent.execution import ExecutionSubAgentError
 from zasky.domain.errors import DomainError
 from zasky.domain.schemas import AddCommitmentRequest, CompleteTaskRequest
+from zasky.integrations.calendar import (
+    build_calendar_feed,
+    google_calendar_quick_add_url,
+)
 from zasky.integrations.discord import DiscordNotificationError
 from zasky.planner.core import as_utc
 from zasky.storage.models import (
@@ -97,11 +101,44 @@ def _day_bounds(local_date: date, tz: ZoneInfo) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _task_calendar_url(
+    task: WeekTask,
+    tz: ZoneInfo,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    commitment_title: str | None = None,
+) -> str:
+    if start is None or end is None:
+        local_start = datetime.combine(
+            task.scheduled_date, time(9, 0), tzinfo=tz
+        )
+        start = local_start.astimezone(UTC)
+        end = (local_start + timedelta(minutes=task.est_min)).astimezone(UTC)
+    else:
+        start = as_utc(start)
+        end = as_utc(end)
+    details = [
+        f"Estimate: {task.est_min} minutes",
+        f"Scheduled: {task.scheduled_date.isoformat()}",
+    ]
+    if commitment_title:
+        details.append(f"Commitment: {commitment_title}")
+    details.append("Created by Zasky.")
+    return google_calendar_quick_add_url(
+        title=task.title,
+        start=start,
+        end=end,
+        details="\n".join(details),
+    )
+
+
 def _task_payload(
     task: WeekTask,
     *,
     week_start: date | None = None,
     commitment_title: str | None = None,
+    google_calendar_url: str | None = None,
 ) -> dict[str, Any]:
     return {
         "id": task.id,
@@ -115,6 +152,7 @@ def _task_payload(
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "week_start": week_start.isoformat() if week_start else None,
         "commitment_title": commitment_title,
+        "google_calendar_url": google_calendar_url,
     }
 
 
@@ -166,6 +204,37 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    async def require_calendar_access(
+        authorization: str | None = Header(default=None),
+        token: str | None = Query(default=None),
+    ) -> None:
+        dashboard_token = _secret_value(settings.dashboard_api_key)
+        feed_token = _secret_value(settings.calendar_feed_token)
+        scheme, _, bearer = (authorization or "").partition(" ")
+        if (
+            scheme.lower() == "bearer"
+            and bearer
+            and dashboard_token
+            and secrets.compare_digest(bearer.strip(), dashboard_token)
+        ):
+            return
+        if (
+            token
+            and feed_token
+            and secrets.compare_digest(token.strip(), feed_token)
+        ):
+            return
+        if not dashboard_token and not feed_token:
+            raise HTTPException(
+                status_code=503,
+                detail="Calendar feed authentication is not configured.",
+            )
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid calendar feed token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     def local_today() -> date:
         return datetime.now(UTC).astimezone(ZoneInfo(settings.timezone)).date()
 
@@ -204,6 +273,21 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                 detail="The record proposal did not apply.",
             )
         return applied
+
+    @dashboard.get(
+        "/api/dashboard/calendar.ics",
+        dependencies=[Depends(require_calendar_access)],
+    )
+    async def calendar_feed() -> Response:
+        content = await build_calendar_feed(app.db, settings)
+        return Response(
+            content=content,
+            media_type="text/calendar; charset=utf-8",
+            headers={
+                "Content-Disposition": 'inline; filename="zasky-calendar.ics"',
+                "Cache-Control": "no-cache, max-age=0",
+            },
+        )
 
     @dashboard.get("/api/dashboard/today", dependencies=[Depends(require_token)])
     async def today(
@@ -279,7 +363,15 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             )
             for item, task in rows:
                 entry = {
-                    **_task_payload(task),
+                    **_task_payload(
+                        task,
+                        google_calendar_url=_task_calendar_url(
+                            task,
+                            tz,
+                            start=item.planned_start_utc,
+                            end=item.planned_end_utc,
+                        ),
+                    ),
                     "disposition": item.disposition,
                     "position": item.position,
                     "outcome": item.outcome,
@@ -454,6 +546,7 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
         allowed = {"active", "parked", "completed", "cancelled"}
         if status is not None and status not in allowed:
             raise HTTPException(status_code=400, detail="Unknown task status.")
+        tz = ZoneInfo(settings.timezone)
         async with app.db.locked_session() as session:
             statement = (
                 select(WeekTask, WeekPlacement, MonthCommitment)
@@ -472,6 +565,31 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             if status is not None:
                 statement = statement.where(WeekTask.status == status)
             rows = (await session.execute(statement)).all()
+            task_ids = [task.id for task, _placement, _commitment in rows]
+            planned: dict[str, tuple[datetime | None, datetime | None]] = {}
+            if task_ids:
+                plan_rows = (
+                    await session.execute(
+                        select(
+                            DayPlanItem.task_id,
+                            DayPlanItem.planned_start_utc,
+                            DayPlanItem.planned_end_utc,
+                        )
+                        .join(DayPlan, DayPlanItem.day_plan_id == DayPlan.id)
+                        .where(
+                            DayPlan.status == "approved",
+                            DayPlanItem.task_id.in_(task_ids),
+                            DayPlanItem.planned_start_utc.is_not(None),
+                            DayPlanItem.planned_end_utc.is_not(None),
+                        )
+                        .order_by(
+                            DayPlan.local_date.desc(),
+                            DayPlan.revision.desc(),
+                        )
+                    )
+                ).all()
+                for task_id, start, end in plan_rows:
+                    planned.setdefault(task_id, (start, end))
             counts = dict(
                 (
                     await session.execute(
@@ -496,6 +614,17 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                         week_start=placement.week_start,
                         commitment_title=(
                             commitment.title if commitment is not None else None
+                        ),
+                        google_calendar_url=_task_calendar_url(
+                            task,
+                            tz,
+                            start=planned.get(task.id, (None, None))[0],
+                            end=planned.get(task.id, (None, None))[1],
+                            commitment_title=(
+                                commitment.title
+                                if commitment is not None
+                                else None
+                            ),
                         ),
                     )
                     for task, placement, commitment in rows
@@ -638,7 +767,15 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
                         "summary": audit.summary_redacted if audit else None,
                         "items": [
                             {
-                                **_task_payload(task),
+                                **_task_payload(
+                                    task,
+                                    google_calendar_url=_task_calendar_url(
+                                        task,
+                                        tz,
+                                        start=item.planned_start_utc,
+                                        end=item.planned_end_utc,
+                                    ),
+                                ),
                                 "disposition": item.disposition,
                                 "position": item.position,
                                 "outcome": item.outcome,

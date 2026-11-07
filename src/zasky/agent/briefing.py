@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from zasky.config import Settings
+from zasky.integrations.calendar import google_calendar_day_quick_add_url
 from zasky.planner.core import as_utc
 from zasky.storage.database import Database
 from zasky.storage.models import DayPlan, DayPlanItem, FixedEvent, WeekTask
@@ -106,6 +107,28 @@ class BriefingBuilder:
                 "",
                 f"⏰ **Latest Wake:** {_display_time(plan.latest_wake_utc, tz)}",
                 "*One must. Three max. Slack protected.*",
+            ]
+        )
+        calendar_details = []
+        for item, task in rows:
+            calendar_details.append(
+                f"{item.disposition.upper()}: {task.title} "
+                f"({_display_time(item.planned_start_utc, tz)}–"
+                f"{_display_time(item.planned_end_utc, tz)})"
+            )
+        calendar_url = google_calendar_day_quick_add_url(
+            title=(
+                f"Zasky Plan — {local_date.strftime('%A, %b')} "
+                f"{local_date.day}"
+            ),
+            local_date=local_date,
+            details="\n".join(calendar_details),
+        )
+        lines.extend(
+            [
+                "",
+                "📅 **Add to Google Calendar:** "
+                f"[Open in Google Calendar]({calendar_url})",
             ]
         )
         return "\n".join(lines)
