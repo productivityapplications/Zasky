@@ -230,7 +230,10 @@ class SwitchClient:
         if self._settings.sandbox_switch_room_id:
             rooms.append(self._settings.sandbox_switch_room_id)
         query["rooms"] = ",".join(rooms)
-        query["filter"] = "addressed"
+        # The sandbox accepts ordinary judge messages even when Discord does not
+        # translate the mention into an addressed flag. Strict owner checks still
+        # apply in the main room.
+        query["filter"] = "all" if self._settings.sandbox_switch_room_id else "addressed"
         if self._highest_processed > 0:
             query["start_from"] = str(self._highest_processed)
         if self._generation is not None:
@@ -305,12 +308,43 @@ class SwitchClient:
                     extra={"component": "switch", "error_code": "INVALID_EVENT"},
                 )
                 return
+            logger.info(
+                "Inbound Switch message",
+                extra={
+                    "component": "switch",
+                    "room_kind": (
+                        "sandbox"
+                        if event.data.room_id
+                        == self._settings.sandbox_switch_room_id
+                        else "main"
+                        if event.data.room_id == self._settings.switch_room_id
+                        else "other"
+                    ),
+                    "addressed": event.data.payload.addressed,
+                    "sender_kind": event.data.payload.sender_kind,
+                    "event_sequence": event.data.sequence,
+                    "body_chars": len(event.data.payload.body),
+                },
+            )
             await self._queue.put(event)
             return
         logger.debug("Ignoring unknown Switch frame type")
 
     async def _handle_connection_state(self, frame: dict[str, Any]) -> None:
         state = ConnectionStateFrame.model_validate(frame)
+        logger.info(
+            "Switch connection state",
+            extra={
+                "component": "switch",
+                "room_count": len(state.rooms),
+                "main_room_present": self._settings.switch_room_id in state.rooms,
+                "sandbox_room_present": (
+                    self._settings.sandbox_switch_room_id in state.rooms
+                    if self._settings.sandbox_switch_room_id
+                    else False
+                ),
+            },
+        )
         allowed_rooms = {self._settings.switch_room_id}
         if self._settings.sandbox_switch_room_id:
             allowed_rooms.add(self._settings.sandbox_switch_room_id)
@@ -634,6 +668,10 @@ class SwitchClient:
             await self._ops.connect_to_room(sandbox_room)
             try:
                 await self._ops.post_message(body, thread_id=thread_id)
+                logger.info(
+                    "Sandbox reply posted",
+                    extra={"component": "switch", "target": "sandbox"},
+                )
             finally:
                 await self._ops.connect_to_room(self._settings.switch_room_id)
 

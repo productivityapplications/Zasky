@@ -389,7 +389,7 @@ operator.
 ## Verification
 
 ```bash
-uv run pytest -q       # 163 tests
+uv run pytest -q       # 165 tests
 uv run ruff check .
 uv run mypy src
 cd frontend && npm run build

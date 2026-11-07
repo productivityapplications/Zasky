@@ -38,8 +38,9 @@ Test pure domain behavior without Switch or a model:
 - Delegation proposal lifecycle, deterministic `delegate` and
   `approve execution` parsing, structured sub-agent output, and task completion
   only after owner sign-off.
-- Human/AI task typing, human-task delegation rejection, sandbox isolation and
-  sandbox dashboard scope.
+- Human/AI task typing, human-task delegation rejection, sandbox isolation,
+  sandbox dashboard scope, sandbox room reply routing and unaddressed sandbox
+  message acceptance.
 
 ## End-to-end tests
 1. Add year goal → add monthly commitment → create weekly tasks → approve week.
@@ -66,7 +67,7 @@ Test pure domain behavior without Switch or a model:
 ## Final staging evidence — 2026-11-07
 
 ```bash
-uv run pytest -q                 # 163 passed
+uv run pytest -q                 # 165 passed
 uv run ruff check .              # clean
 uv run mypy src                  # clean
 cd frontend && npm run build     # Next.js production build succeeds

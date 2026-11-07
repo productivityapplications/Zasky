@@ -80,7 +80,21 @@ def test_sandbox_room_allows_judges_but_stays_isolated(settings: Settings) -> No
         configured,
     )
     assert decision.allowed is True
-    assert decision.reason == "ok"
+    assert decision.reason == "sandbox"
+    unaddressed = authorize_message(
+        make_event(
+            room_id="sandbox-room-1",
+            sender=STRANGER_ID,
+            addressed=False,
+        ),
+        configured,
+    )
+    assert unaddressed.allowed is True
+    agent_kind = make_event(
+        room_id="sandbox-room-1", sender="agent-participant", addressed=False
+    )
+    agent_kind.data.payload.sender_kind = "agent"
+    assert authorize_message(agent_kind, configured).reason == "sender_is_agent"
     wrong_sender_main = authorize_message(
         make_event(sender=STRANGER_ID), configured
     )

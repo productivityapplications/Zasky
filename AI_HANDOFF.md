@@ -51,7 +51,7 @@
 | Current Git commit | `4b4ccb5` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
-| Unit/integration/E2E evidence | 163 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
+| Unit/integration/E2E evidence | 165 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -274,7 +274,7 @@
   task-pool "⚡ Delegate to AI" flow with loading, error and output states.
 - Extended the Next.js proxy allowlist and delegation timeout. `npm run build`
   is clean.
-- Tests: **163 passed**; `ruff check .` clean; `mypy src` clean.
+- Tests: **165 passed**; `ruff check .` clean; `mypy src` clean.
 - Live reads through the Vercel proxy shape returned 3 goals, 3 commitments and
   8 tasks from Neon. Delegation of a missing task returned `404` without
   invoking the model.
@@ -298,7 +298,7 @@
   Briefing appends an all-day Google Calendar link.
 - Added the dashboard **📅 Sync to Calendar** button and per-task 📅 links.
 - Live Neon feed check: 9 VEVENTs, 6 task alarms, fixed events present.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - The feed is available through the Vercel proxy with the dashboard token; the
   optional direct VPS URL uses `?token=`.
 
@@ -317,7 +317,7 @@
   **1. The Deliverable**, **2. What I Did**, **3. Verification Checklist**.
 - Dashboard delegate modal is now Confirm Delegation → structured output →
   Approve Execution & Complete Task.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - Neon schema: `5234927536a9`; container rebuilt with the new backend.
 
 ## Execution context assembly (2026-11-07)
@@ -333,7 +333,7 @@
   forwarded as `user_instructions`.
 - The dashboard Confirm Delegation state includes an optional Additional Context
   / Instructions textarea and sends it to the API.
-- Tests remain **163 passed**; `ruff` clean; `mypy src` clean; `npm run build`
+- Tests remain **165 passed**; `ruff` clean; `mypy src` clean; `npm run build`
   clean.
 
 ## Final task typing, sandbox, branding and README (2026-11-07)
@@ -346,16 +346,35 @@
   `SANDBOX_SWITCH_ROOM_ID` routing for `#judges-sandbox`.
 - Zasky was invited into the judges-sandbox Switch room via
   `invite_agent_to_room`; the room is now live and the bridge external channel
-  ID matches the configured Discord channel. The WebSocket connects successfully
-  with both rooms in its subscription.
+  ID matches the configured Discord channel. The WebSocket connection state now
+  reports both rooms present.
+- Sandbox subscription uses Switch `filter=all` so ordinary judge messages are
+  delivered even when Discord does not translate the mention into an addressed
+  flag. The sandbox accepts non-agent messages without the owner ID check and
+  rejects agent/system senders to prevent loops.
+- Sandbox replies explicitly connect to `SANDBOX_SWITCH_ROOM_ID`, post, then
+  restore the main room binding.
 - Added `NEXT_PUBLIC_DEMO_MODE` proxy selection and the Hackathon Demo banner.
   Judges can add/complete/delegate without touching Neon owner data.
 - Added slanted Z SVG favicon, removed the profile icon from the yellow rail,
   and added GitHub/Documentation/WeMakeDevs/Switch footer links.
 - Replaced `README.md` with the full overview, architecture, prerequisites,
   four-phase setup, user guide and judge sandbox instructions.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; normal and demo-mode
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; normal and demo-mode
   `npm run build` clean.
+
+## Judge sandbox delivery fix (2026-11-07)
+
+- Added explicit inbound room diagnostics: room kind, addressed flag, sender
+  kind, body length and sequence.
+- Added connection-state diagnostics: room count, main-room present and
+  sandbox-room present.
+- Switched the combined subscription to `filter=all`; main-room policy still
+  requires the exact owner and addressed message.
+- Sandbox policy accepts any human message in the exact sandbox room, including
+  unaddressed messages, and rejects agent/system senders.
+- Sandbox replies use temporary room binding and always restore the main room.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean.
 
 ## Known issues and blockers
 

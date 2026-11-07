@@ -28,10 +28,24 @@ def authorize_message(event: MessageEvent, settings: Settings) -> AccessDecision
     is_sandbox = bool(sandbox_room and data.room_id == sandbox_room)
     if data.room_id != settings.switch_room_id and not is_sandbox:
         return AccessDecision(False, "room_not_allowed")
-    if not payload.addressed:
-        return AccessDecision(False, "not_addressed")
-    if not is_sandbox and payload.sender != settings.owner_switch_participant_id:
-        return AccessDecision(False, "sender_not_owner")
+
+    if not is_sandbox:
+        if not payload.addressed:
+            return AccessDecision(False, "not_addressed")
+        if payload.sender != settings.owner_switch_participant_id:
+            return AccessDecision(False, "sender_not_owner")
+    else:
+        # The sandbox is a public judge surface. Discord mention translation is
+        # unreliable across bridges, so any human message in this exact room is
+        # accepted. Never accept the agent's or a system participant's own
+        # message, which would create a reply loop.
+        if payload.sender_kind in {"agent", "system"}:
+            return AccessDecision(False, "sender_is_agent")
+        if payload.sender in {
+            settings.switch_agent_id,
+            settings.switch_connection_id,
+        }:
+            return AccessDecision(False, "sender_is_agent")
 
     body = payload.body
     if not body.strip():
@@ -39,4 +53,4 @@ def authorize_message(event: MessageEvent, settings: Settings) -> AccessDecision
     if len(body) > settings.max_message_chars:
         return AccessDecision(False, "message_too_long")
 
-    return AccessDecision(True, "ok")
+    return AccessDecision(True, "sandbox" if is_sandbox else "ok")

@@ -10,7 +10,7 @@
   and added GitHub/Docs/WeMakeDevs/Switch footer links.
 - Replaced README with the complete architecture, phases, user guide and judge
   instructions.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; demo and normal
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; demo and normal
   `npm run build` clean.
 
 ## 2026-11-07 — Execution context assembly
@@ -23,7 +23,7 @@
 - `delegate ZK-XXXX [instructions]` now parses and forwards the optional suffix.
 - Dashboard Confirm Delegation modal has an optional Additional Context /
   Instructions textarea passed to the delegate API.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 
 ## 2026-11-07 — Tailwind redesign and human-in-the-loop delegation
 
@@ -42,7 +42,7 @@
   Markdown sections.
 - Updated the dashboard delegate modal to Confirm Delegation → structured
   output → Approve Execution & Complete Task.
-- Tests: **163 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+- Tests: **165 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - Neon schema migrated to `526c14430d14`.
 
 ## 2026-11-07 — Calendar feed and Google Calendar links

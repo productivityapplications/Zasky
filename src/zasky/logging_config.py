@@ -28,6 +28,14 @@ _EXTRA_FIELDS = (
     "duration_ms",
     "error_code",
     "connection_status",
+    "room_kind",
+    "addressed",
+    "sender_kind",
+    "body_chars",
+    "room_count",
+    "main_room_present",
+    "sandbox_room_present",
+    "target",
 )
 
 
