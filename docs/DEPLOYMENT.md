@@ -97,6 +97,27 @@ or security group must allow `8100/tcp` too.
 For real personal use, terminate TLS in front of port 8100 and use the HTTPS URL
 in Vercel. Rotate `DASHBOARD_API_KEY` after the demo.
 
+## Discord channel expansion
+
+The one-off `scripts/setup_discord.py` creates the Zasky HQ category and its five
+text channels with the Discord REST API. It is idempotent and is **not run
+automatically** by deployment. See `docs/DISCORD_SETUP.md` for review, run,
+permission and environment details.
+
+After the script prints channel IDs, add them and `DISCORD_BOT_TOKEN` to the
+protected env file, then restart the Zasky container:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Routing:
+
+- `#daily-briefings` ← approved `plan_day`;
+- `#reconcile-alerts` ← approved `reconcile`;
+- `#ai-workspace` ← Execution Sub-Agent results;
+- `#zasky-control` and `#dashboard-sync` are created but not auto-wired.
+
 ## Rollback
 - Stop Zasky writer before restoring or replacing its DB.
 - Back up current DB and record commit/version.

@@ -42,6 +42,14 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 | `WEEKLY_AVAILABILITY_JSON` | Yes | Owner-supplied weekday work windows | Validated JSON; local `HH:MM` windows; no guessed hours |
 | `HEALTH_BIND_HOST` | Yes | Health bind address | `127.0.0.1` default |
 | `HEALTH_BIND_PORT` | Yes | Private health port | Host firewall/private only |
+| `DISCORD_BOT_TOKEN` | For Discord routing | Bot token used only for outbound application notifications | Secret; server-only; same bot as Switch's Discord bridge |
+| `DISCORD_GUILD_ID` | Setup script only | Target Discord server ID | Not needed by the runtime |
+| `DISCORD_API_BASE_URL` | No | Discord REST base URL | Default `https://discord.com/api/v10`; server-only |
+| `DISCORD_DAILY_BRIEFINGS_CHANNEL_ID` | For Daily Briefing routing | Destination for approved `plan_day` briefings | Discord snowflake; `#daily-briefings` |
+| `DISCORD_RECONCILE_ALERTS_CHANNEL_ID` | For recovery routing | Destination for approved `reconcile` summaries | Discord snowflake; `#reconcile-alerts` |
+| `DISCORD_AI_WORKSPACE_CHANNEL_ID` | For execution results | Destination for Execution Sub-Agent results | Discord snowflake; `#ai-workspace` |
+| `DISCORD_CONTROL_CHANNEL_ID` | Optional | Created control channel ID | Discord snowflake; `#zasky-control` |
+| `DISCORD_DASHBOARD_SYNC_CHANNEL_ID` | Optional | Created dashboard sync channel ID | Discord snowflake; `#dashboard-sync` |
 | `DASHBOARD_BIND_HOST` | No | Owner dashboard API bind address | Default `0.0.0.0` so Vercel can reach it |
 | `DASHBOARD_PORT` | No | Owner dashboard API port | Default `8100`; port 8000 is used by Switch |
 | `DASHBOARD_API_KEY` | Yes for dashboard | Bearer token required by every dashboard route | Secret; never `NEXT_PUBLIC_*`; rotate after demos |
@@ -57,6 +65,10 @@ All configuration is validated at startup. Secrets are server-only. Unknown or i
 - `DASHBOARD_API_KEY` is a server-side bearer secret. In Vercel it belongs in
   `ZASKY_DASHBOARD_TOKEN` with server-only visibility; never prefix either name
   with `NEXT_PUBLIC_`.
+- `DISCORD_BOT_TOKEN` is server-only. The setup script reads it from the
+  protected env file; it is never printed, committed or exposed to the model.
+  The bot needs View Channels and Manage Channels for setup, plus Send Messages
+  and Embed Links in the three notification channels.
 - Keep encryption keys for backups separate from the backup files.
 - Redact environment dumps, exception traces and CI output.
 

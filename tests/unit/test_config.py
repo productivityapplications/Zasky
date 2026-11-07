@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from zasky.config import Settings, normalize_database_url
 
@@ -109,3 +109,15 @@ def test_neon_url_is_normalized_for_asyncpg() -> None:
     assert "ssl=require" in normalized
     assert "sslmode" not in normalized
     assert "channel_binding" not in normalized
+
+
+def test_discord_notification_configuration_flag(settings: Settings) -> None:
+    assert settings.discord_notifications_configured is False
+    configured = settings.model_copy(
+        update={
+            "discord_bot_token": SecretStr("synthetic-token"),
+            "discord_daily_briefings_channel_id": "111111111111111111",
+        }
+    )
+    assert configured.discord_notifications_configured is True
+    assert "synthetic-token" not in repr(configured.safe_summary())

@@ -18,6 +18,7 @@ from zasky.storage.models import (
     WeekPlacement,
     WeekTask,
 )
+from zasky.storage.repositories import OwnerConfigRepository
 
 
 class FakeOps:
@@ -169,6 +170,29 @@ class FakeDocumentOps(FakeOps):
         return {"ok": True}
 
 
+class FakeDiscord:
+    def __init__(self, delivered: bool = True) -> None:
+        self.delivered = delivered
+        self.daily: list[tuple[str, str]] = []
+        self.reconcile: list[dict] = []
+        self.execution: list[dict] = []
+
+    async def send_daily_briefing(self, briefing: str, local_date: str) -> bool:
+        self.daily.append((briefing, local_date))
+        return self.delivered
+
+    async def send_reconcile_summary(self, **kwargs) -> bool:
+        self.reconcile.append(kwargs)
+        return self.delivered
+
+    async def send_execution_result(self, **kwargs) -> bool:
+        self.execution.append(kwargs)
+        return self.delivered
+
+    async def close(self) -> None:
+        return None
+
+
 @pytest.mark.asyncio
 async def test_plan_approval_briefing_posts_and_persists(tmp_path, settings: Settings) -> None:
     from zasky.app import ZaskyApp
@@ -178,18 +202,83 @@ async def test_plan_approval_briefing_posts_and_persists(tmp_path, settings: Set
     )
     app = ZaskyApp(configured)
     await app.db.init()
+    await OwnerConfigRepository(app.db).ensure_seeded(configured)
+    start = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
+    try:
+        await seed_plan(app.db, start_utc=start)
+        ops = FakeDocumentOps()
+        discord = FakeDiscord()
+        app.ops = ops  # type: ignore[assignment]
+        app.discord = discord  # type: ignore[assignment]
+        note = await app._post_daily_briefing("2026-11-06")
+        assert "posted to `#daily-briefings`" in note
+        assert ops.posts == []
+        assert len(discord.daily) == 1
+        assert "Daily Briefing" in discord.daily[0][0]
+        assert len(ops.documents) == 1
+        assert ops.documents[0]["name"] == "Daily Briefing — 2026-11-06"
+    finally:
+        await app.db.close(close_connections=False)
+        await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_daily_briefing_falls_back_when_discord_unconfigured(
+    tmp_path, settings: Settings
+) -> None:
+    from zasky.app import ZaskyApp
+
+    configured = settings.model_copy(
+        update={"database_url": f"sqlite+aiosqlite:///{tmp_path / 'app-fallback.db'}"}
+    )
+    app = ZaskyApp(configured)
+    await app.db.init()
+    await OwnerConfigRepository(app.db).ensure_seeded(configured)
     start = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
     try:
         await seed_plan(app.db, start_utc=start)
         ops = FakeDocumentOps()
         app.ops = ops  # type: ignore[assignment]
+        app.discord = FakeDiscord(delivered=False)  # type: ignore[assignment]
         note = await app._post_daily_briefing("2026-11-06")
-        assert "Daily Briefing posted" in note
-        assert "no pin operation" in note
+        assert "main room" in note
         assert len(ops.posts) == 1
-        assert "Daily Briefing" in ops.posts[0][0]
-        assert len(ops.documents) == 1
-        assert ops.documents[0]["name"] == "Daily Briefing — 2026-11-06"
+    finally:
+        await app.db.close(close_connections=False)
+        await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_reconcile_summary_is_routed_to_channel(
+    tmp_path, settings: Settings
+) -> None:
+    from zasky.app import ZaskyApp
+
+    configured = settings.model_copy(
+        update={"database_url": f"sqlite+aiosqlite:///{tmp_path / 'app-reconcile.db'}"}
+    )
+    app = ZaskyApp(configured)
+    await app.db.init()
+    await OwnerConfigRepository(app.db).ensure_seeded(configured)
+    start = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
+    try:
+        await seed_plan(app.db, start_utc=start)
+        discord = FakeDiscord()
+        app.discord = discord  # type: ignore[assignment]
+        note = await app._post_reconcile_summary(
+            "ZK-TEST",
+            {
+                "date": "2026-11-06",
+                "items": 1,
+                "moves": 2,
+                "feasibility": "week_holds",
+            },
+        )
+        assert "#reconcile-alerts" in note
+        assert len(discord.reconcile) == 1
+        assert discord.reconcile[0]["code"] == "ZK-TEST"
+        assert discord.reconcile[0]["moves"] == 2
+        assert discord.reconcile[0]["items"][0]["title"] == "Record the demo narration"
     finally:
         await app.db.close(close_connections=False)
         await asyncio.sleep(0.2)

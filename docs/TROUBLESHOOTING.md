@@ -24,6 +24,12 @@
 | Dashboard API 503 | Backend token not configured or Vercel token missing | Set `DASHBOARD_API_KEY` on the VPS and `ZASKY_DASHBOARD_TOKEN` in Vercel, then restart/redeploy |
 | Vercel dashboard cannot reach VPS | Port 8100 blocked or wrong `NEXT_PUBLIC_API_URL` | `sudo ufw allow 8100/tcp`; check cloud security group; use `http://VPS_IP:8100` (port 8000 is Switch) |
 | Dashboard shows empty today | No approved plan for the local date | Confirm `TIMEZONE`; approve a `plan_day` proposal or run the dashboard seed script |
+| Discord setup returns 403 | Bot lacks Manage Channels or is not in the guild | Grant View Channels + Manage Channels, verify guild ID, rerun the setup script |
+| Discord setup returns 401 | Invalid bot token or wrong token type | Set `DISCORD_BOT_TOKEN` to the bot token, not the application/client secret |
+| Briefing stays in main room | Channel ID or bot token not configured | Add the `#daily-briefings` ID and `DISCORD_BOT_TOKEN` to the protected env and restart |
+| Reconcile summary not posted | `DISCORD_RECONCILE_ALERTS_CHANNEL_ID` missing or bot lacks Send Messages | Add the ID, grant Send Messages in `#reconcile-alerts`, restart |
+| Execution result returns 503 | `DISCORD_AI_WORKSPACE_CHANNEL_ID` or token missing | Add both, restart, retry the internal endpoint |
+| Execution result returns 502 | Discord rejected the message | Check bot permissions in `#ai-workspace`; inspect the logged `DISCORD_HTTP_*` code only |
 | Spend cap reached | Monthly hard limit | Stop model calls; do not silently raise cap; operator must authorize changed cap |
 | Backup fails | Disk full, encryption key unavailable or SQLite copied unsafely | Preserve DB, free only safe space, use SQLite online backup/checkpoint process; retest restore |
 | `gap` event received | Switch could not replay full continuity | Reread room context; do not interpret old events as fresh commands |

@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-07  
-**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres and a Vercel-ready dashboard; waiting on Vercel deployment and room privacy  
+**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed Vercel dashboard and the Discord HQ notification layout ready to run  
 **Current phase:** Post-Phase 9 cloud/dashboard upgrade — verified staging, awaiting authorized release  
-**Next task:** Deploy `frontend/` to Vercel using `frontend/README.md`, then confirm the Discord room is private.
+**Next task:** Review and run `scripts/setup_discord.py`, add the printed channel IDs plus the bot token to the protected env, then restart Zasky.
 
 ## Current state
 
@@ -47,11 +47,11 @@
 | Preview/staging authority | Verified VPS staging; Vercel deployment pending operator |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
-| Deployed commit | `b52cfdb` (Neon Postgres + owner dashboard) |
+| Deployed commit | `b52cfdb` runtime; Discord routing pending operator channel IDs |
 | Current Git commit | `562636a` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
-| Unit/integration/E2E evidence | 124 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write |
+| Unit/integration/E2E evidence | 136 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write; Discord notifier routing tests |
 | Demo video | Produced — `artifacts/demo/zasky-demo.mp4` (97s, local transcript) |
 
 ## Phase 1 evidence
@@ -224,14 +224,34 @@
   dashboard API uses `8100`. The exact optional firewall command is
   `sudo ufw allow 8100/tcp`.
 
+## Discord HQ layout and notification routing (2026-11-07)
+
+- Added `scripts/setup_discord.py`, a one-off Discord REST setup script. It
+  creates the `Zasky HQ` category and `#zasky-control`, `#daily-briefings`,
+  `#reconcile-alerts`, `#ai-workspace`, `#dashboard-sync`.
+- The script is idempotent, refuses to move same-named channels outside the
+  category, writes `data/discord_channels.json` (mode `0600`) and prints the
+  backend env lines. It was **not executed**; it was syntax-checked only.
+- Added a narrow outbound `DiscordNotifier` for the three routing channels.
+  Chat remains Switch; no inbound Discord Gateway connection and no model tool.
+- Approved `plan_day` → `#daily-briefings`; approved `reconcile` →
+  `#reconcile-alerts`; Execution Sub-Agent results →
+  `POST /api/internal/execution-results` → `#ai-workspace`.
+- Discord messages cap at 2,000 characters and disable all mention parsing.
+- Added `docs/DISCORD_SETUP.md`, `DISCORD_*` settings and tests for routing,
+  unconfigured fallback, 429 retry, permission failure and truncation.
+- Tests: **136 passed**; `ruff check .` clean; `mypy src` clean.
+- The setup script remains unexecuted by design. The operator must provide
+  `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in the protected env before running.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
    enforces exact owner and room checks, but `@everyone → View Channel = deny`
    must be applied before real personal use or a public demo.
-2. **Vercel deployment:** the frontend is built and verified locally but the
-   operator still needs to import `frontend/` in Vercel and set
-   `NEXT_PUBLIC_API_URL` and `ZASKY_DASHBOARD_TOKEN`.
+2. **Discord channel IDs:** the setup script creates the channels, but the
+   backend routes stay on fallback until the operator adds `DISCORD_BOT_TOKEN`
+   and the printed channel IDs to the protected env and restarts Zasky.
 3. **Plain HTTP:** the dashboard API is reachable on port 8100 over HTTP for the
    hackathon. The bearer token crosses the network; use HTTPS and rotate the
    token for real personal data.

@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 
 from zasky.domain.errors import DomainError
 from zasky.domain.schemas import CompleteTaskRequest
+from zasky.integrations.discord import DiscordNotificationError
 from zasky.planner.core import as_utc
 from zasky.storage.models import (
     AuditEvent,
@@ -36,6 +37,12 @@ if TYPE_CHECKING:
 
 class CompleteTaskBody(BaseModel):
     actual_min: int | None = Field(default=None, ge=0, le=100000)
+
+
+class ExecutionResultBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=6000)
+    task_id: str | None = Field(default=None, max_length=36)
 
 
 def _secret_value(value: SecretStr | str | None) -> str:
@@ -309,6 +316,37 @@ def create_dashboard_app(app: ZaskyApp) -> FastAPI:
             "task_id": result.get("task_id", task_id),
             "status": result.get("status", "completed"),
             "already": result.get("already"),
+        }
+
+    @dashboard.post(
+        "/api/internal/execution-results",
+        dependencies=[Depends(require_token)],
+    )
+    async def execution_result(body: ExecutionResultBody) -> dict[str, Any]:
+        """Accept a result from the Execution Sub-Agent and post it to Discord."""
+        try:
+            delivered = await app.publish_execution_result(
+                title=body.title,
+                body=body.body,
+                task_id=body.task_id,
+            )
+        except DiscordNotificationError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Execution result delivery failed ({exc.code}).",
+            ) from exc
+        if not delivered:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Execution result routing is not configured. Set "
+                    "DISCORD_BOT_TOKEN and DISCORD_AI_WORKSPACE_CHANNEL_ID."
+                ),
+            )
+        return {
+            "ok": True,
+            "delivered": True,
+            "channel": "ai-workspace",
         }
 
     @dashboard.get(

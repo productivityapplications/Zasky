@@ -16,7 +16,12 @@ from zasky.agent.context import ContextBuilder
 from zasky.agent.orchestrator import AgentOrchestrator
 from zasky.config import Settings
 from zasky.domain.errors import DomainError
+from zasky.domain.schemas import QueryRequest
 from zasky.domain.service import DomainService
+from zasky.integrations.discord import (
+    DiscordNotificationError,
+    DiscordNotifier,
+)
 from zasky.integrations.openrouter.client import OpenRouterClient
 from zasky.integrations.openrouter.usage import CostGuard
 from zasky.ops.dashboard_api import create_dashboard_app
@@ -40,6 +45,7 @@ class ZaskyApp:
         self.ops = SwitchOperations(settings)
         self.domain = DomainService(self.db, settings)
         self.briefing = BriefingBuilder(self.db, settings)
+        self.discord = DiscordNotifier(settings)
         self.alarm_scheduler = AlarmScheduler(self.db, self.ops, settings)
         self.llm: OpenRouterClient | None = None
         self.orchestrator: AgentOrchestrator | None = None
@@ -184,6 +190,7 @@ class ZaskyApp:
         self._dashboard_task = None
         if self.llm is not None:
             await self.llm.close()
+        await self.discord.close()
         await self.db.close()
         await self.ops.close()
         self._lock.release()
@@ -193,7 +200,23 @@ class ZaskyApp:
             from datetime import date as date_type
 
             briefing = await self.briefing.build(date_type.fromisoformat(local_date))
-            await self.ops.post_message(briefing)
+            delivered = False
+            try:
+                delivered = await self.discord.send_daily_briefing(
+                    briefing, local_date
+                )
+            except DiscordNotificationError as exc:
+                logger.error(
+                    "Daily briefing channel delivery failed",
+                    extra={
+                        "component": "discord",
+                        "error_code": exc.code,
+                    },
+                )
+            if not delivered:
+                # Keep the staging flow usable until the operator adds the
+                # channel IDs and bot token to the protected environment.
+                await self.ops.post_message(briefing)
             try:
                 await self.ops.create_room_document(
                     name=f"Daily Briefing — {local_date}",
@@ -209,10 +232,15 @@ class ZaskyApp:
                         "error_code": "BRIEFING_DOCUMENT_FAILED",
                     },
                 )
+            if delivered:
+                return (
+                    "\n\n📅 **Daily Briefing posted to "
+                    "`#daily-briefings`.**"
+                )
             return (
-                "\n\n📅 **Daily Briefing posted.** "
-                "Switch 0.31.0 has no pin operation; pin the message in Discord "
-                "if you want it at the top."
+                "\n\n📅 **Daily Briefing posted in the main room.** "
+                "Configure `DISCORD_DAILY_BRIEFINGS_CHANNEL_ID` to route it "
+                "to `#daily-briefings`."
             )
         except Exception:
             logger.exception(
@@ -220,6 +248,76 @@ class ZaskyApp:
                 extra={"component": "briefing", "error_code": "BRIEFING_FAILED"},
             )
             return "\n\nThe plan is stored, but the Daily Briefing post failed."
+
+    async def _post_reconcile_summary(
+        self, code: str, applied: dict[str, object]
+    ) -> str:
+        local_date = applied.get("date")
+        if not isinstance(local_date, str):
+            return ""
+        items: list[dict[str, object]] = []
+        try:
+            result = await self.domain.query(
+                QueryRequest(state="today", horizon=local_date)
+            )
+            raw_items = result.get("items", [])
+            if isinstance(raw_items, list):
+                items = [
+                    item for item in raw_items if isinstance(item, dict)
+                ]
+        except Exception:
+            logger.warning(
+                "Recovery summary detail query failed",
+                extra={
+                    "component": "discord",
+                    "error_code": "RECONCILE_DETAIL_FAILED",
+                },
+            )
+        feasibility = applied.get("feasibility")
+        moves = applied.get("moves")
+        try:
+            delivered = await self.discord.send_reconcile_summary(
+                code=code,
+                local_date=local_date,
+                items=items,
+                moves=moves if isinstance(moves, int) else 0,
+                feasibility=(
+                    str(feasibility) if feasibility is not None else None
+                ),
+            )
+        except DiscordNotificationError as exc:
+            logger.error(
+                "Reconcile summary channel delivery failed",
+                extra={
+                    "component": "discord",
+                    "error_code": exc.code,
+                },
+            )
+            return (
+                "\n\nRecovery applied, but the `#reconcile-alerts` "
+                "summary was not posted."
+            )
+        if delivered:
+            return "\n\n♻️ **Recovery summary posted to `#reconcile-alerts`.**"
+        return (
+            "\n\nRecovery applied. Configure "
+            "`DISCORD_RECONCILE_ALERTS_CHANNEL_ID` to post the summary to "
+            "`#reconcile-alerts`."
+        )
+
+    async def publish_execution_result(
+        self,
+        *,
+        title: str,
+        body: str,
+        task_id: str | None = None,
+    ) -> bool:
+        """Delivery hook for the Execution Sub-Agent."""
+        return await self.discord.send_execution_result(
+            title=title,
+            body=body,
+            task_id=task_id,
+        )
 
     async def _handle_message(self, event: MessageEvent) -> str:
         if self.orchestrator is None:
@@ -292,11 +390,14 @@ class ZaskyApp:
         code = result.get("proposal", command.code or "proposal")
         if result.get("status") == "approved":
             note = ""
+            applied = result.get("applied", {})
             if result.get("proposal_type") == "day":
-                applied = result.get("applied", {})
                 local_date = applied.get("date") if isinstance(applied, dict) else None
                 if isinstance(local_date, str):
                     note = await self._post_daily_briefing(local_date)
+            elif result.get("proposal_type") == "reconcile":
+                if isinstance(applied, dict):
+                    note = await self._post_reconcile_summary(code, applied)
             return (
                 f"✅ **Approved** `{code}`\n\n"
                 "Your plan change is now stored." + note,

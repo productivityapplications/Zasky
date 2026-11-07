@@ -39,6 +39,30 @@ When parking, provide a resume note: where you stopped and the next concrete act
 
 Morning/evening reminders can be disabled. If enabled, they are sent at configured local times and at most once per type/day. A long outage may cause a reminder to be skipped rather than sent late.
 
+## Discord channel layout (2026-11-07)
+
+The one-off `scripts/setup_discord.py` creates a private server layout:
+
+```text
+Zasky HQ
+├── #zasky-control
+├── #daily-briefings
+├── #reconcile-alerts
+├── #ai-workspace
+└── #dashboard-sync
+```
+
+Routing after setup:
+
+- approved Daily Briefings go to `#daily-briefings`;
+- approved recovery summaries go to `#reconcile-alerts`;
+- Execution Sub-Agent results go to `#ai-workspace`;
+- `#zasky-control` and `#dashboard-sync` are ready for future use but are not
+  auto-wired to the Switch room.
+
+The bot token stays in the protected env file. The model cannot post arbitrary
+Discord content and `@everyone` mentions are disabled on notification messages.
+
 ## Owner dashboard (2026-11-07)
 
 Open the Vercel dashboard URL to see:

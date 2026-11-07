@@ -33,6 +33,19 @@ The frontend lives in `frontend/` and deploys to Vercel. See
 `frontend/README.md` for environment variables, root-directory settings and the
 firewall command. Port `8100` is the dashboard API; port `8000` is Switch.
 
+Discord HQ layout setup is a separate reviewed one-off step:
+
+```bash
+uv run python scripts/setup_discord.py \
+  --env-file /root/Zasky-secrets/zasky.env \
+  --guild-id YOUR_DISCORD_SERVER_ID
+```
+
+It requires `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in the protected env, and
+a bot with View Channels + Manage Channels. It prints the channel-ID env lines
+for `#daily-briefings`, `#reconcile-alerts`, `#ai-workspace` and the other
+channels. See `docs/DISCORD_SETUP.md`.
+
 This guide applies after the coding agent has completed the intake and implementation. Do not put secrets in Git.
 
 ## Prerequisites

@@ -155,4 +155,21 @@ documented scope change, not silent drift:
   shipped to the browser.
 
 Still excluded: public sign-up, multi-user tenancy, payments, marketing pages,
-public analytics and any direct Discord/third-party calendar API.
+public analytics and any third-party calendar API.
+
+### Discord channel fan-out (2026-11-07)
+
+The operator explicitly requested a multi-channel Discord layout. Switch's
+`post_message` targets only the currently connected room, so the application
+uses a narrow Discord REST notifier for three outbound notification channels.
+This does **not** replace Switch:
+
+- chat replies and approvals still flow through Switch;
+- Zasky opens no inbound Discord Gateway connection;
+- the model receives no Discord tool and cannot post arbitrary content;
+- only configured channel IDs are used;
+- `allowed_mentions` is disabled;
+- the bot token is server-only and never logged.
+
+`scripts/setup_discord.py` also uses Discord REST directly, as requested, and is
+not executed by the agent.

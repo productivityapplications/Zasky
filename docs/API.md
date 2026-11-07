@@ -240,6 +240,39 @@ Completion goes through `DomainService.complete_task`, so it updates
 append-only audit event in one transaction. The dashboard cannot create,
 rename, park or reschedule tasks.
 
+## Outbound Discord routing
+
+The chat interface remains Switch. The application uses a narrow Discord REST
+notifier only for three owner-facing notification channels. It does not read
+Discord events, and the model has no Discord tool.
+
+| Trigger | Destination | Behavior |
+|---|---|---|
+| Approved `plan_day` | `DISCORD_DAILY_BRIEFINGS_CHANNEL_ID` (`#daily-briefings`) | Posts the deterministic Daily Briefing; falls back to the main Switch room if the channel is not configured |
+| Approved `reconcile` | `DISCORD_RECONCILE_ALERTS_CHANNEL_ID` (`#reconcile-alerts`) | Posts date, kept tasks, moved count and week feasibility |
+| Execution Sub-Agent result | `DISCORD_AI_WORKSPACE_CHANNEL_ID` (`#ai-workspace`) | Posts a token-gated internal result |
+
+Execution Sub-Agent ingestion:
+
+```http
+POST /api/internal/execution-results
+Authorization: Bearer <DASHBOARD_API_KEY>
+Content-Type: application/json
+
+{
+  "title": "Draft complete",
+  "body": "The execution sub-agent produced a first draft.",
+  "task_id": "optional-task-uuid"
+}
+```
+
+The endpoint returns `503` when the workspace channel is not configured and
+`502` when Discord delivery fails. It never echoes the bot token.
+
+Discord message content is capped at 2,000 characters and sent with
+`allowed_mentions: {"parse": []}` so owner/task text cannot ping `@everyone` or
+roles. No inbound Discord Gateway connection is opened by Zasky.
+
 ## Rate and abuse controls
 
 - Maximum inbound message body: 8,000 characters.

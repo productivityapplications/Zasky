@@ -115,6 +115,17 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=60.0, ge=5, le=120)
     typing_placeholder_enabled: bool = True
 
+    # Outbound Discord notification channels. These are application-only
+    # destinations; the conversational interface remains Switch. The token is
+    # the Discord bot token already used by the Switch bridge.
+    discord_bot_token: SecretStr | None = None
+    discord_api_base_url: str = "https://discord.com/api/v10"
+    discord_daily_briefings_channel_id: str | None = None
+    discord_reconcile_alerts_channel_id: str | None = None
+    discord_ai_workspace_channel_id: str | None = None
+    discord_control_channel_id: str | None = None
+    discord_dashboard_sync_channel_id: str | None = None
+
     # Owner dashboard API (Vercel). The token is mandatory; the public API is
     # never unauthenticated even though CORS is permissive for the demo.
     dashboard_bind_host: str = "0.0.0.0"
@@ -219,11 +230,63 @@ class Settings(BaseSettings):
             raise ValueError("must not include a query or fragment")
         return candidate
 
+    @field_validator("discord_api_base_url")
+    @classmethod
+    def _valid_discord_api_base(cls, value: str) -> str:
+        candidate = value.strip().rstrip("/")
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("must use http:// or https://")
+        if not parsed.netloc:
+            raise ValueError("must include a host")
+        if parsed.username or parsed.password:
+            raise ValueError("must not embed credentials")
+        return candidate
+
+    @field_validator(
+        "discord_daily_briefings_channel_id",
+        "discord_reconcile_alerts_channel_id",
+        "discord_ai_workspace_channel_id",
+        "discord_control_channel_id",
+        "discord_dashboard_sync_channel_id",
+    )
+    @classmethod
+    def _valid_discord_channel_id(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not cleaned.isdigit() or len(cleaned) < 15:
+            raise ValueError("must be a Discord snowflake channel ID")
+        return cleaned
+
     @property
     def llm_enabled(self) -> bool:
         return bool(
             self.openai_api_key
             and self.openai_api_key.get_secret_value().strip()
+        )
+
+    @property
+    def discord_notifications_configured(self) -> bool:
+        token = self.discord_bot_token
+        if token is None:
+            return False
+        token_value = (
+            token.get_secret_value()
+            if hasattr(token, "get_secret_value")
+            else str(token)
+        )
+        return bool(
+            token_value.strip()
+            and any(
+                (
+                    self.discord_daily_briefings_channel_id,
+                    self.discord_reconcile_alerts_channel_id,
+                    self.discord_ai_workspace_channel_id,
+                )
+            )
         )
 
     @field_validator("timezone")
@@ -310,6 +373,9 @@ class Settings(BaseSettings):
             "max_message_chars": self.max_message_chars,
             "llm_model": self.openai_model,
             "llm_enabled": self.llm_enabled,
+            "discord_notifications_configured": (
+                self.discord_notifications_configured
+            ),
         }
 
 

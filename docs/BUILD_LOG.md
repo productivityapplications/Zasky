@@ -1,5 +1,29 @@
 # Zasky Build Log
 
+## 2026-11-07 — Discord HQ layout and notification routing
+
+- Added `scripts/setup_discord.py`, a reviewed-but-not-executed one-off Discord
+  REST setup script. It creates the `Zasky HQ` category and `#zasky-control`,
+  `#daily-briefings`, `#reconcile-alerts`, `#ai-workspace`, `#dashboard-sync`.
+  It is idempotent, refuses to move same-named channels outside the category,
+  writes `data/discord_channels.json` (mode `0600`) and prints backend env lines.
+- Added a narrow outbound `DiscordNotifier` for three configured channel IDs.
+  The chat interface remains Switch; no inbound Discord Gateway is opened and
+  the model has no Discord tool.
+- Approved `plan_day` briefings now go to `#daily-briefings` when configured,
+  with a main-room fallback. Approved `reconcile` summaries go to
+  `#reconcile-alerts`. Execution Sub-Agent results go to `#ai-workspace` through
+  `POST /api/internal/execution-results`.
+- Discord messages cap content at 2,000 characters and send
+  `allowed_mentions: {"parse": []}`.
+- Added `DISCORD_*` settings, `docs/DISCORD_SETUP.md`, API/config/deployment/
+  operator notes and unit tests for channel routing, retries, permissions and
+  the execution-result ingestion endpoint.
+- Tests: **136 passed**; `ruff check .` clean; `mypy src` clean. The setup script
+  was syntax-checked with `py_compile` but **not executed**.
+- Release state remains **verified-staging-awaiting-authorized-release** and the
+  Vercel dashboard is deployed and working.
+
 ## 2026-11-07 — Neon Postgres and Vercel-ready owner dashboard
 
 - Added `asyncpg` and normalized Neon URLs (`postgres://`/`postgresql://` →

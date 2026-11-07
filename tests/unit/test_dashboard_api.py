@@ -36,6 +36,18 @@ AVAILABILITY = (
 TOKEN = "dashboard-test-token"  # noqa: S105 - synthetic test credential
 
 
+class FakePublisher:
+    def __init__(self) -> None:
+        self.delivered = True
+        self.calls: list[dict[str, Any]] = []
+
+    async def publish_execution_result(
+        self, *, title: str, body: str, task_id: str | None = None
+    ) -> bool:
+        self.calls.append({"title": title, "body": body, "task_id": task_id})
+        return self.delivered
+
+
 async def approve(service: DomainService, result: dict) -> dict:
     return await service.resolve_proposal(
         action="approve",
@@ -122,10 +134,15 @@ async def dashboard_env(tmp_path, settings: Settings):
             )
         )
         await approve(domain, fixed)
-        api = create_dashboard_app(
-            SimpleNamespace(settings=configured, db=db, domain=domain)  # type: ignore[arg-type]
+        publisher = FakePublisher()
+        fake_app = SimpleNamespace(
+            settings=configured,
+            db=db,
+            domain=domain,
+            publish_execution_result=publisher.publish_execution_result,
         )
-        yield api, db, domain
+        api = create_dashboard_app(fake_app)  # type: ignore[arg-type]
+        yield api, db, domain, publisher
     finally:
         await db.close(close_connections=False)
         await asyncio.sleep(0.2)
@@ -141,7 +158,7 @@ def client(app: Any) -> httpx.AsyncClient:
 
 @pytest.mark.asyncio
 async def test_dashboard_requires_bearer_token(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=api),
         base_url="http://dashboard.test",
@@ -159,7 +176,7 @@ async def test_dashboard_requires_bearer_token(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_today_returns_must_should_and_fixed_events(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         response = await http.get("/api/dashboard/today?date=2026-11-06")
         assert response.status_code == 200
@@ -177,7 +194,7 @@ async def test_today_returns_must_should_and_fixed_events(dashboard_env) -> None
 
 @pytest.mark.asyncio
 async def test_today_without_a_plan_is_explicit(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         response = await http.get("/api/dashboard/today?date=2026-11-07")
         assert response.status_code == 200
@@ -189,7 +206,7 @@ async def test_today_without_a_plan_is_explicit(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_tasks_can_be_listed_and_completed(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         listing = await http.get("/api/dashboard/tasks")
         assert listing.status_code == 200
@@ -215,7 +232,7 @@ async def test_tasks_can_be_listed_and_completed(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_task_completion_returns_404(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         response = await http.post("/api/dashboard/tasks/missing/complete")
         assert response.status_code == 404
@@ -224,7 +241,7 @@ async def test_unknown_task_completion_returns_404(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_tasks_rejects_unknown_status(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         response = await http.get("/api/dashboard/tasks?status=exploded")
         assert response.status_code == 400
@@ -232,7 +249,7 @@ async def test_tasks_rejects_unknown_status(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_reconciliation_history_is_available(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with client(api) as http:
         response = await http.get("/api/dashboard/reconciliations")
         assert response.status_code == 200
@@ -241,7 +258,7 @@ async def test_reconciliation_history_is_available(dashboard_env) -> None:
 
 @pytest.mark.asyncio
 async def test_cors_preflight_allows_vercel_browser(dashboard_env) -> None:
-    api, _db, _domain = dashboard_env
+    api, _db, _domain, _publisher = dashboard_env
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=api),
         base_url="http://dashboard.test",
@@ -256,3 +273,39 @@ async def test_cors_preflight_allows_vercel_browser(dashboard_env) -> None:
         )
         assert response.status_code == 200
         assert response.headers["access-control-allow-origin"] == "*"
+
+
+@pytest.mark.asyncio
+async def test_execution_result_routes_to_ai_workspace(dashboard_env) -> None:
+    api, _db, _domain, publisher = dashboard_env
+    async with client(api) as http:
+        response = await http.post(
+            "/api/internal/execution-results",
+            json={
+                "title": "Draft complete",
+                "body": "The execution sub-agent produced a first draft.",
+                "task_id": "task-1",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["channel"] == "ai-workspace"
+        assert publisher.calls == [
+            {
+                "title": "Draft complete",
+                "body": "The execution sub-agent produced a first draft.",
+                "task_id": "task-1",
+            }
+        ]
+
+
+@pytest.mark.asyncio
+async def test_execution_result_requires_configuration(dashboard_env) -> None:
+    api, _db, _domain, publisher = dashboard_env
+    publisher.delivered = False
+    async with client(api) as http:
+        response = await http.post(
+            "/api/internal/execution-results",
+            json={"title": "Draft", "body": "Body"},
+        )
+        assert response.status_code == 503
+        assert "not configured" in response.json()["detail"]
