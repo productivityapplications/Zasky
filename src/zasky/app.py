@@ -433,6 +433,11 @@ class ZaskyApp:
                 "discord_delivered": False,
                 "already": "completed",
             }
+        if started.get("already") == "running":
+            raise ExecutionSubAgentError(
+                "CONFLICT",
+                "An execution is already running for this task.",
+            )
         execution_code = str(started["execution_code"])
         try:
             return await self.delegate_task(
