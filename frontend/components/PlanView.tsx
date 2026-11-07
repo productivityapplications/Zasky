@@ -2,24 +2,24 @@
 
 import { CalendarDays, Check, Clock } from "lucide-react";
 
-import { cn, formatDate, parseTimeLabel } from "@/lib/utils";
+import { cn, parseTimeLabel } from "@/lib/utils";
 import type { FixedEvent, TodayItem, TodayPayload } from "@/lib/types";
 import { EmptyState, Spinner } from "@/components/ui";
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const START_MINUTE = 8 * 60;
 const END_MINUTE = 18 * 60;
 const GRID_MINUTES = END_MINUTE - START_MINUTE;
 
 function weekDays(date: string): { label: string; day: number; date: string }[] {
   const parsed = new Date(`${date}T12:00:00Z`);
-  const weekday = parsed.getUTCDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  const start = new Date(parsed);
+  start.setUTCDate(parsed.getUTCDate() - 2);
   return Array.from({ length: 5 }, (_, index) => {
-    const current = new Date(parsed);
-    current.setUTCDate(parsed.getUTCDate() + mondayOffset + index);
+    const current = new Date(start);
+    current.setUTCDate(start.getUTCDate() + index);
     return {
-      label: DAY_LABELS[index],
+      label: DAY_LABELS[current.getUTCDay() === 0 ? 6 : current.getUTCDay() - 1],
       day: current.getUTCDate(),
       date: current.toISOString().slice(0, 10),
     };
@@ -27,23 +27,8 @@ function weekDays(date: string): { label: string; day: number; date: string }[] 
 }
 
 function activeDayIndex(date: string): number {
-  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
-  if (weekday === 0) {
-    return 4;
-  }
-  if (weekday === 6) {
-    return 4;
-  }
-  return weekday - 1;
-}
-
-function timePosition(label: string | null): { top: number; height: number } | null {
-  const start = parseTimeLabel(label);
-  if (start === null) {
-    return null;
-  }
-  const top = Math.max(0, ((start - START_MINUTE) / GRID_MINUTES) * 100);
-  return { top, height: 9 };
+  const index = weekDays(date).findIndex((day) => day.date === date);
+  return index >= 0 ? index : 2;
 }
 
 function CalendarLink({ url, title }: { url: string | null; title: string }) {
@@ -74,26 +59,19 @@ function PlanTaskCard({
   onComplete: (id: string) => void;
 }) {
   const completed = item.status === "completed" || item.outcome === "completed";
-  const position =
-    timePosition(item.planned_start_display) ??
-    timePosition(item.planned_end_display);
-  const style = position
-    ? { top: `${position.top}%`, minHeight: `${position.height}%` }
-    : undefined;
   return (
     <article
       className={cn(
-        "group absolute inset-x-2 z-10 rounded-[20px] border border-black/10 p-3 text-ink shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_42px_-20px_rgba(17,17,17,0.42)]",
+        "group relative rounded-[18px] border border-black/10 p-2.5 text-ink shadow-card transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_42px_-20px_rgba(17,17,17,0.42)]",
         item.disposition === "must" ? "bg-zest" : "bg-mint",
         completed && "bg-white/60 text-ink/45 grayscale-[0.25]",
       )}
-      style={style}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
-            {item.disposition === "must" ? "Must do" : "Should do"} ·{" "}
-            {item.planned_est_min} min
+          <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-black/45">
+            {item.disposition === "must" ? "Must" : "Should"} ·{" "}
+            {item.planned_est_min}m
           </p>
           <h3 className="mt-1 text-[13px] font-semibold leading-tight tracking-[-0.02em]">
             {item.title}
@@ -132,17 +110,8 @@ function PlanTaskCard({
 }
 
 function FixedEventCard({ event }: { event: FixedEvent }) {
-  const position =
-    timePosition(event.starts_at_display) ??
-    timePosition(event.ends_at_display);
-  const style = position
-    ? { top: `${position.top}%`, minHeight: `${position.height}%` }
-    : undefined;
   return (
-    <article
-      className="absolute inset-x-2 z-[9] rounded-[20px] border border-black/10 bg-sky/90 p-3 text-ink shadow-card"
-      style={style}
-    >
+    <article className="relative rounded-[18px] border border-black/10 bg-sky/90 p-2.5 text-ink shadow-card">
       <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
         Fixed event
       </p>
@@ -179,21 +148,35 @@ export function PlanView({
   const days = weekDays(today.date);
   const active = activeDayIndex(today.date);
   const planItems = [...today.must, ...today.should];
+  const timelineEntries = [
+    ...today.fixed_events.map((event) => ({
+      kind: "fixed" as const,
+      start: event.starts_at_display ?? "",
+      event,
+    })),
+    ...planItems.map((item) => ({
+      kind: "task" as const,
+      start: item.planned_start_display ?? "",
+      item,
+    })),
+  ].sort(
+    (a, b) => (parseTimeLabel(a.start) ?? 0) - (parseTimeLabel(b.start) ?? 0),
+  );
 
   return (
     <section className="pb-5" aria-label="Today's plan">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-muted">
-            Today’s plan
+            Approved timeline
           </p>
           <h2 className="mt-1 font-display text-3xl font-semibold tracking-[-0.05em]">
-            {formatDate(today.date, true)}
+            Today’s Plan
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {today.battery ? (
-            <span className="rounded-full bg-zest px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em]">
+            <span className="rounded-full bg-zest px-3 py-1.5 text-[10px] font-semibold capitalize">
               {today.battery} battery
             </span>
           ) : null}
@@ -211,79 +194,66 @@ export function PlanView({
       </div>
 
       <div className="space-y-2.5 md:hidden">
-        {[
-          ...today.fixed_events.map((event) => ({
-            kind: "fixed" as const,
-            start: event.starts_at_display ?? "",
-            event,
-          })),
-          ...planItems.map((item) => ({
-            kind: "task" as const,
-            start: item.planned_start_display ?? "",
-            item,
-          })),
-        ]
-          .sort((a, b) => (a.start > b.start ? 1 : -1))
-          .map((entry) =>
-            entry.kind === "fixed" ? (
-              <article
-                key={entry.event.id}
-                className="rounded-[20px] border border-black/10 bg-sky/90 p-4 text-ink shadow-card"
-              >
-                <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
-                  Fixed event
-                </p>
-                <h3 className="mt-1 text-sm font-semibold">{entry.event.title}</h3>
-                <p className="mt-1 text-[10px] text-black/55">
-                  {entry.event.starts_at_display ?? "—"} –{" "}
-                  {entry.event.ends_at_display ?? "—"}
-                </p>
-              </article>
-            ) : (
-              <article
-                key={entry.item.id}
-                className={cn(
-                  "rounded-[20px] border border-black/10 p-4 text-ink shadow-card",
-                  entry.item.disposition === "must" ? "bg-zest" : "bg-mint",
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
-                      {entry.item.disposition} · {entry.item.planned_est_min} min
-                    </p>
-                    <h3 className="mt-1 text-sm font-semibold">
-                      {entry.item.title}
-                    </h3>
-                    <p className="mt-1 text-[10px] text-black/55">
-                      {entry.item.planned_start_display ?? "—"} –{" "}
-                      {entry.item.planned_end_display ?? "—"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onComplete(entry.item.id)}
-                    disabled={
-                      Boolean(pending[entry.item.id]) ||
-                      entry.item.status === "completed"
-                    }
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-black/20 bg-white/35"
-                    aria-label={`Complete ${entry.item.title}`}
-                  >
-                    {pending[entry.item.id] ? (
-                      <Spinner />
-                    ) : entry.item.status === "completed" ? (
-                      <Check size={13} />
-                    ) : null}
-                  </button>
+        {timelineEntries.map((entry) =>
+          entry.kind === "fixed" ? (
+            <article
+              key={entry.event.id}
+              className="rounded-[20px] border border-black/10 bg-sky/90 p-4 text-ink shadow-card"
+            >
+              <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
+                Fixed event
+              </p>
+              <h3 className="mt-1 text-sm font-semibold">{entry.event.title}</h3>
+              <p className="mt-1 text-[10px] text-black/55">
+                {entry.event.starts_at_display ?? "—"} –{" "}
+                {entry.event.ends_at_display ?? "—"}
+              </p>
+            </article>
+          ) : (
+            <article
+              key={entry.item.id}
+              className={cn(
+                "rounded-[20px] border border-black/10 p-4 text-ink shadow-card",
+                entry.item.disposition === "must" ? "bg-zest" : "bg-mint",
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-black/45">
+                    {entry.item.disposition} · {entry.item.planned_est_min} min
+                  </p>
+                  <h3 className="mt-1 text-sm font-semibold">
+                    {entry.item.title}
+                  </h3>
+                  <p className="mt-1 text-[10px] text-black/55">
+                    {entry.item.planned_start_display ?? "—"} –{" "}
+                    {entry.item.planned_end_display ?? "—"}
+                  </p>
                 </div>
-              </article>
-            ),
-          )}
+                <button
+                  type="button"
+                  onClick={() => onComplete(entry.item.id)}
+                  disabled={
+                    Boolean(pending[entry.item.id]) ||
+                    entry.item.status === "completed"
+                  }
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-black/20 bg-white/35"
+                  aria-label={`Complete ${entry.item.title}`}
+                >
+                  {pending[entry.item.id] ? (
+                    <Spinner />
+                  ) : entry.item.status === "completed" ? (
+                    <Check size={13} />
+                  ) : null}
+                </button>
+              </div>
+            </article>
+          ),
+        )}
       </div>
 
       <div className="hidden rounded-panel border border-black/[0.05] bg-white/55 p-3 shadow-card backdrop-blur-sm md:block md:p-4">
-        <div className="grid grid-cols-[52px_repeat(5,minmax(0,1fr))] gap-1.5 pb-2">
+        <div className="grid grid-cols-[44px_repeat(5,minmax(0,1fr))] gap-1.5 pb-2">
           <div />
           {days.map((day, index) => (
             <div key={day.date} className="flex flex-col items-center gap-1">
@@ -304,7 +274,7 @@ export function PlanView({
           ))}
         </div>
 
-        <div className="relative grid grid-cols-[52px_repeat(5,minmax(0,1fr))] gap-1.5">
+        <div className="relative grid grid-cols-[44px_repeat(5,minmax(0,1fr))] gap-1.5">
           <div className="relative h-[590px]">
             {Array.from({ length: 6 }, (_, index) => {
               const hour = 8 + index * 2;
@@ -335,19 +305,20 @@ export function PlanView({
                 />
               ))}
               {index === active ? (
-                <>
-                  {today.fixed_events.map((event) => (
-                    <FixedEventCard key={event.id} event={event} />
-                  ))}
-                  {planItems.map((item) => (
-                    <PlanTaskCard
-                      key={item.id}
-                      item={item}
-                      busy={Boolean(pending[item.id])}
-                      onComplete={onComplete}
-                    />
-                  ))}
-                </>
+                <div className="absolute inset-1.5 z-10 flex flex-col gap-1.5 overflow-y-auto pr-0.5">
+                  {timelineEntries.map((entry) =>
+                    entry.kind === "fixed" ? (
+                      <FixedEventCard key={entry.event.id} event={entry.event} />
+                    ) : (
+                      <PlanTaskCard
+                        key={entry.item.id}
+                        item={entry.item}
+                        busy={Boolean(pending[entry.item.id])}
+                        onComplete={onComplete}
+                      />
+                    ),
+                  )}
+                </div>
               ) : null}
             </div>
           ))}

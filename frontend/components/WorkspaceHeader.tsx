@@ -63,7 +63,7 @@ export function WorkspaceHeader({
         </Button>
         <Button variant="secondary" onClick={onCommitment}>
           <Plus size={13} />
-          Commitment
+          New Commitment
         </Button>
         <Button variant="primary" onClick={onTask}>
           <Plus size={13} />
