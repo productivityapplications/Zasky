@@ -56,8 +56,8 @@ npm run dev
 Then deploy `frontend/` to Vercel using `frontend/README.md`. The token stays
 server-side in `ZASKY_DASHBOARD_TOKEN`; never expose it as `NEXT_PUBLIC_*`.
 
-The final Discord layout is created by the reviewed one-off script
-`scripts/setup_discord.py` (not run automatically):
+The final Discord layout was created by the reviewed one-off script
+`scripts/setup_discord.py`:
 
 ```text
 Zasky HQ
@@ -68,10 +68,10 @@ Zasky HQ
 └── #dashboard-sync
 ```
 
-After the script prints the channel IDs, add them and `DISCORD_BOT_TOKEN` to the
-protected env file. Approved briefings go to `#daily-briefings`, recovery
-summaries to `#reconcile-alerts`, and Execution Sub-Agent results to
-`#ai-workspace`. See `docs/DISCORD_SETUP.md`.
+The script's channel IDs and `DISCORD_BOT_TOKEN` are in the protected env file.
+Approved briefings go to `#daily-briefings`, recovery summaries to
+`#reconcile-alerts`, and Execution Sub-Agent results to `#ai-workspace`. See
+`docs/DISCORD_SETUP.md`.
 
 The local protocol/transcript demo is in `artifacts/demo/`:
 

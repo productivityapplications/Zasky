@@ -1,5 +1,19 @@
 # Zasky Build Log
 
+## 2026-11-07 — Discord routing activated
+
+- Operator ran the reviewed `scripts/setup_discord.py`; the `Zasky HQ` category
+  and all five channels were created.
+- Added `DISCORD_BOT_TOKEN` and the five channel IDs to the protected env.
+- Recreated the container with `docker compose up -d --force-recreate` so the
+  new environment was loaded (a restart alone would not do this).
+- Verified inside the container: routing configured, daily/reconcile/AI channel
+  IDs present. Read-only Discord API checks returned HTTP 200 for all three
+  channels. No test message was posted.
+- Health after recreation: database/switch/schema/model ready.
+- Next: exercise one plan approval and one reconcile approval, then apply
+  Discord room privacy.
+
 ## 2026-11-07 — Discord HQ layout and notification routing
 
 - Added `scripts/setup_discord.py`, a reviewed-but-not-executed one-off Discord

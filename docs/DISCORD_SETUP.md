@@ -46,7 +46,8 @@ as fallback token names.
 
 ## Review and run
 
-The script was reviewed before execution. Run it only after review:
+The script was reviewed and has been run by the operator. The category and all
+five channels now exist. The command used was:
 
 ```bash
 cd /root/Zasky
@@ -64,7 +65,7 @@ uv run python scripts/setup_discord.py \
   --dry-run
 ```
 
-The script writes `data/discord_channels.json` (mode `0600`) and prints the exact
+The script wrote `data/discord_channels.json` (mode `0600`) and printed the exact
 channel-ID lines for the protected env file. `data/` is gitignored.
 
 ## Backend routing

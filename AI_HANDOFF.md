@@ -1,9 +1,9 @@
 # AI_HANDOFF.md — Zasky Implementation State
 
 **Last updated:** 2026-11-07  
-**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed Vercel dashboard and the Discord HQ notification layout ready to run  
+**Project status:** Phases 1–9 complete; VPS staging with Neon Postgres, a deployed Vercel dashboard and active Discord HQ notification routing  
 **Current phase:** Post-Phase 9 cloud/dashboard upgrade — verified staging, awaiting authorized release  
-**Next task:** Review and run `scripts/setup_discord.py`, add the printed channel IDs plus the bot token to the protected env, then restart Zasky.
+**Next task:** Send one plan approval and one reconcile approval to verify the new channel routes, then apply the Discord room privacy setting.
 
 ## Current state
 
@@ -44,10 +44,10 @@
 | Owner timezone and availability supplied | Yes — Africa/Lagos; daily 09:00–21:00 |
 | Seed goals/commitments/week tasks supplied | Yes — synthetic demo plan plus dashboard-today/reconcile seed |
 | Backup destination/restore procedure validated | Yes — manual SQLite online backup + restore drill; Neon is provider-managed |
-| Preview/staging authority | Verified VPS staging; Vercel deployment pending operator |
+| Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
-| Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
-| Deployed commit | `0f2bd14` (Discord routing code; channel IDs pending operator setup) |
+| Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
+| Deployed commit | `0f2bd14` (Discord routing active in recreated container) |
 | Current Git commit | `3b53c9b` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
@@ -244,15 +244,29 @@
 - The setup script remains unexecuted by design. The operator must provide
   `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in the protected env before running.
 
+## Discord routing activation (2026-11-07)
+
+- The operator ran `scripts/setup_discord.py`; the category and five channels
+  exist in Discord.
+- `DISCORD_BOT_TOKEN` and all five channel IDs are present in the protected env.
+- The container was recreated with `docker compose up -d --force-recreate` so
+  the new environment variables were loaded.
+- Inside the container, `discord_notifications_configured` is `True` and the
+  daily, reconcile and AI workspace channel IDs are all present.
+- A read-only Discord API check returned HTTP 200 for all three configured
+  channels; no test message was posted.
+- Health after recreation: `database ok`, `switch connected`, `schema current`,
+  `model configured`.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application
    enforces exact owner and room checks, but `@everyone → View Channel = deny`
    must be applied before real personal use or a public demo.
-2. **Discord setup credentials:** `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID`
-   are not present in `/root/Zasky-secrets/zasky.env`, so the reviewed setup
-   script cannot be executed yet. Add them to the protected env, run the script,
-   then add the printed channel IDs and restart Zasky.
+2. **Discord routing is active, but not yet exercised.** The channel IDs and bot
+   token are in the protected env and the bot can read all three configured
+   channels. Send one plan approval and one reconcile approval to confirm the
+   user-visible posts in `#daily-briefings` and `#reconcile-alerts`.
 3. **Plain HTTP:** the dashboard API is reachable on port 8100 over HTTP for the
    hackathon. The bearer token crosses the network; use HTTPS and rotate the
    token for real personal data.
@@ -287,8 +301,10 @@ These are recorded before further code and must not be silently changed:
 - Use current Switch WebSocket protocol and documented HTTP operations; deployed
   protocol verified against Switch 0.31.0.
 - Exactly seven domain tools in later phases.
-- SQLite, one active writer, no public product API.
-- No frontend, website, dashboard, payments or external calendar/email.
+- Postgres in cloud staging, SQLite in local tests, one active writer.
+- Token-gated owner dashboard API only; no public unauthenticated planning API.
+- No payments or external calendar/email.
+- Outbound Discord notifications are application-only; chat remains Switch.
 - No generated tasks from goals.
 - Owner approval required before plan mutation.
 - No production deployment without explicit authority.
