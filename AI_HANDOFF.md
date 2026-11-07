@@ -343,7 +343,11 @@
   handler, coordinator and dashboard. Only AI tasks show the delegate action.
 - Added the public judge sandbox: isolated SQLite `SANDBOX_DATABASE_URL`, sandbox
   owner `@sandbox:judge`, mounted dashboard at `/sandbox/api/dashboard`, and
-  optional `SANDBOX_SWITCH_ROOM_ID` routing for `#judges-sandbox`.
+  `SANDBOX_SWITCH_ROOM_ID` routing for `#judges-sandbox`.
+- Zasky was invited into the judges-sandbox Switch room via
+  `invite_agent_to_room`; the room is now live and the bridge external channel
+  ID matches the configured Discord channel. The WebSocket connects successfully
+  with both rooms in its subscription.
 - Added `NEXT_PUBLIC_DEMO_MODE` proxy selection and the Hackathon Demo banner.
   Judges can add/complete/delegate without touching Neon owner data.
 - Added slanted Z SVG favicon, removed the profile icon from the yellow rail,
