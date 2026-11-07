@@ -130,7 +130,7 @@ export default function DashboardPage() {
     setDelegateState({ task, status: "confirm" });
   }, []);
 
-  const runDelegation = useCallback(async () => {
+  const runDelegation = useCallback(async (instruction: string) => {
     if (!delegateState) {
       return;
     }
@@ -141,7 +141,9 @@ export default function DashboardPage() {
         output: string;
         execution_code?: string;
         discord_delivered?: boolean;
-      }>(`/api/dashboard/delegate/${encodeURIComponent(task.id)}`, {});
+      }>(`/api/dashboard/delegate/${encodeURIComponent(task.id)}`, {
+        instruction: instruction.trim() || null,
+      });
       setDelegateState({
         task,
         status: "done",
@@ -379,7 +381,7 @@ export default function DashboardPage() {
         <DelegateModal
           state={delegateState}
           onClose={() => setDelegateState(null)}
-          onConfirm={() => void runDelegation()}
+          onConfirm={(instruction) => void runDelegation(instruction)}
           onApprove={() => void approveDelegation()}
         />
       ) : null}

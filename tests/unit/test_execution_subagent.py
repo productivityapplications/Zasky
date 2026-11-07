@@ -63,6 +63,11 @@ async def test_execution_subagent_produces_bounded_output(settings: Settings) ->
             "est_min": 45,
             "scheduled_date": "2026-11-06",
             "commitment_title": "Produce the demo",
+            "commitment_priority": "high",
+            "commitment_deadline": "2026-11-08",
+            "goal_title": "Deliver the hackathon demo",
+            "goal_evidence_of_done": "A reviewed 150-second demo.",
+            "resume_note": "Stopped after the opening hook.",
             "status": "active",
         },
         instruction="Make it 90 seconds long.",
@@ -75,11 +80,17 @@ async def test_execution_subagent_produces_bounded_output(settings: Settings) ->
     assert cost.checked == 1
     assert len(cost.recorded) == 1
     assert len(llm.messages) == 2
-    assert "Execution Sub-Agent" in llm.messages[0]["content"]
-    assert "## 1. The Deliverable" in llm.messages[0]["content"]
-    assert "browse" in llm.messages[0]["content"]
-    assert "Draft the demo script" in llm.messages[1]["content"]
-    assert "Make it 90 seconds long." in llm.messages[1]["content"]
+    system_prompt = llm.messages[0]["content"]
+    assert "Execution Agent" in system_prompt
+    assert "## 1. The Deliverable" in system_prompt
+    assert "browse" in system_prompt
+    assert "Draft the demo script" in system_prompt
+    assert "Produce the demo" in system_prompt
+    assert "Deliver the hackathon demo" in system_prompt
+    assert "A reviewed 150-second demo." in system_prompt
+    assert "Stopped after the opening hook." in system_prompt
+    assert "Make it 90 seconds long." in system_prompt
+    assert "If the context is insufficient" in system_prompt
 
 
 @pytest.mark.asyncio

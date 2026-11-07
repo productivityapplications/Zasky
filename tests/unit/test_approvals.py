@@ -18,6 +18,13 @@ def test_delegation_and_execution_commands_parse() -> None:
     assert approved is not None
     assert approved.action == "approve_execution"
     assert approved.code == "ZK-9K2M"
+    instructed = parse_approval_command(
+        "delegate ZK-4F8Q Tell the agent to use a casual tone"
+    )
+    assert instructed is not None
+    assert instructed.action == "delegate"
+    assert instructed.code == "ZK-4F8Q"
+    assert instructed.instructions == "Tell the agent to use a casual tone"
     assert parse_approval_command("delegate") is None
     assert parse_approval_command("approve execution") is None
 

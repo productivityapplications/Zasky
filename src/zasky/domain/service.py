@@ -1246,9 +1246,12 @@ class DomainService:
             }
 
     async def task_detail(self, task_id: str) -> dict[str, Any]:
-        """Read the bounded task context used by the Execution Sub-Agent."""
+        """Read the bounded task, commitment and year-goal context."""
         async with self._db.locked_session() as session:
             task, placement, commitment = await self._task(session, task_id)
+            goal = None
+            if commitment is not None and commitment.goal_id:
+                goal = await session.get(YearGoal, commitment.goal_id)
             return {
                 "id": task.id,
                 "title": task.title,
@@ -1257,8 +1260,29 @@ class DomainService:
                 "status": task.status,
                 "ad_hoc": task.ad_hoc,
                 "resume_note": task.resume_note,
+                "commitment_id": (
+                    commitment.id if commitment is not None else None
+                ),
                 "commitment_title": (
                     commitment.title if commitment is not None else None
+                ),
+                "commitment_priority": (
+                    commitment.priority if commitment is not None else None
+                ),
+                "commitment_deadline": (
+                    commitment.deadline_local_date.isoformat()
+                    if commitment is not None
+                    and commitment.deadline_local_date is not None
+                    else None
+                ),
+                "commitment_consequence": (
+                    commitment.consequence if commitment is not None else None
+                ),
+                "goal_id": goal.id if goal is not None else None,
+                "goal_title": goal.title if goal is not None else None,
+                "goal_year": goal.year if goal is not None else None,
+                "goal_evidence_of_done": (
+                    goal.evidence_of_done if goal is not None else None
                 ),
                 "week_start": placement.week_start.isoformat(),
             }

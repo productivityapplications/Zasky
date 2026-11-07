@@ -320,6 +320,22 @@
 - Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
 - Neon schema: `526c14430d14`; container rebuilt with the new backend.
 
+## Execution context assembly (2026-11-07)
+
+- The Execution Agent now receives a rich context block built from Postgres:
+  task title/estimate/date/status, parent commitment title/priority/deadline/
+  consequence, parent year goal title/evidence of done, resume note and optional
+  owner instructions.
+- The system prompt explicitly says the agent has the Task, Commitment and Year
+  Goal, and must name missing context in the Verification Checklist when it
+  cannot complete the task well.
+- `delegate ZK-XXXX [instructions]` is parsed deterministically; the suffix is
+  forwarded as `user_instructions`.
+- The dashboard Confirm Delegation state includes an optional Additional Context
+  / Instructions textarea and sends it to the API.
+- Tests remain **158 passed**; `ruff` clean; `mypy src` clean; `npm run build`
+  clean.
+
 ## Known issues and blockers
 
 1. **Room privacy:** Switch reports the room as `channel_public`. The application

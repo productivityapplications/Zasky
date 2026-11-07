@@ -424,10 +424,11 @@ export function DelegateModal({
 }: {
   state: NonNullable<DelegateState>;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (instruction: string) => void;
   onApprove: () => void;
 }) {
   const sections = splitExecutionOutput(state.output ?? "");
+  const [instruction, setInstruction] = useState("");
   return (
     <Modal
       title="Execution Agent"
@@ -456,6 +457,26 @@ export function DelegateModal({
               </p>
             </div>
           </div>
+        ) : null}
+
+        {state.status === "confirm" ? (
+          <label className="block">
+            <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted">
+              Additional Context / Instructions for the Sub-Agent (Optional)
+            </span>
+            <textarea
+              className="mt-1.5 min-h-28 w-full rounded-field border border-black/10 bg-white px-3.5 py-3 text-sm text-ink outline-none transition placeholder:text-muted/55 focus:border-ink/30 focus:ring-2 focus:ring-ink/10"
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              placeholder="Tone, constraints, source material, audience, or what the deliverable must include…"
+              maxLength={2000}
+              rows={4}
+            />
+            <span className="mt-1 block text-[10px] text-muted/70">
+              This is passed directly to the Execution Agent with the task,
+              commitment and goal context.
+            </span>
+          </label>
         ) : null}
 
         {state.status === "loading" || state.status === "approving" ? (
@@ -546,7 +567,11 @@ export function DelegateModal({
           Close
         </Button>
         {state.status === "confirm" ? (
-          <Button type="button" variant="primary" onClick={onConfirm}>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => onConfirm(instruction)}
+          >
             Confirm Delegation
           </Button>
         ) : null}

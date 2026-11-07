@@ -749,6 +749,12 @@ async def test_dashboard_task_appends_to_existing_commitment_placement(
     assert len(week_state["tasks"]) == 3
     detail = await service.task_detail(task["id"])
     assert detail["commitment_title"] == "Ship the planning loop"
+    assert detail["commitment_priority"] == "high"
+    assert detail["commitment_deadline"] == "2027-01-31"
+    assert detail["goal_title"] == "Ship Zasky"
+    assert detail["goal_evidence_of_done"] == (
+        "A dated review note and a passing demo"
+    )
     assert detail["scheduled_date"] == "2026-11-06"
 
 

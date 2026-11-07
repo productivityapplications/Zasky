@@ -31,6 +31,10 @@ class ExecutionSubAgentError(RuntimeError):
 
 _SYSTEM_PROMPT = """You are Zasky's Execution Sub-Agent.
 
+You are the Execution Agent. You have been given the Task, its parent
+Commitment, and the Year Goal. Use this context to ensure your output is highly
+specific and relevant to the user's overarching goals.
+
 You may only:
 - draft copy;
 - write code snippets;
@@ -39,8 +43,12 @@ You may only:
 
 You cannot browse the web, access external services, modify a database, send
 messages, run commands, or read secrets. Never claim to have done any of those
-things. Work on exactly one owner-selected task, use only the task details and
-owner instruction supplied, and do not invent new tasks or approvals.
+things. Work on exactly one owner-selected task, use only the task details,
+parent context and owner instruction supplied, and do not invent new tasks or
+approvals.
+
+If the context is insufficient to complete the task well, state exactly what is
+missing in your Verification Checklist.
 
 ALWAYS return structured Markdown with exactly these three second-level
 headings, in this order:
@@ -61,16 +69,41 @@ actions.
 
 If the task is ambiguous, state the smallest clarification needed inside the
 deliverable and still make the most useful safe assumption."""
-_USER_PROMPT = """Task: {title}
-Estimate: {est_min} minutes
-Scheduled: {scheduled_date}
-Commitment: {commitment}
-Status: {status}
+_USER_PROMPT = """Execute the task using the context above and the required
+three-section Markdown format. Do not invent context that is not present."""
 
-Owner instruction:
-{instruction}
 
-Produce the deliverable now using the required three-section Markdown format."""
+def build_execution_context(
+    task: dict[str, Any], instruction: str | None
+) -> str:
+    """Build the owner-scoped context block supplied to the Execution Agent."""
+    owner_instruction = (instruction or "").strip()[:2000]
+    lines = [
+        f"Task title: {task.get('title', 'Untitled task')}",
+        f"Task estimate: {task.get('est_min', 'unknown')} minutes",
+        f"Scheduled date: {task.get('scheduled_date', 'unknown')}",
+        f"Task status: {task.get('status', 'unknown')}",
+        f"Parent month commitment: {task.get('commitment_title') or 'Not linked'}",
+    ]
+    if task.get("commitment_priority"):
+        lines.append(f"Commitment priority: {task['commitment_priority']}")
+    if task.get("commitment_deadline"):
+        lines.append(f"Commitment deadline: {task['commitment_deadline']}")
+    if task.get("commitment_consequence"):
+        lines.append(f"Commitment consequence: {task['commitment_consequence']}")
+    lines.extend(
+        [
+            f"Parent year goal: {task.get('goal_title') or 'Not linked'}",
+            (
+                "Year goal evidence of done: "
+                f"{task.get('goal_evidence_of_done') or 'Not provided'}"
+            ),
+            f"Existing resume note: {task.get('resume_note') or 'None'}",
+            "Owner instructions: "
+            + (owner_instruction or "No additional instructions supplied."),
+        ]
+    )
+    return "\n".join(lines)
 
 
 def ensure_structured_output(output: str) -> str:
@@ -120,17 +153,17 @@ class ExecutionSubAgent:
                 exc.code, exc.message, retryable=exc.retryable
             ) from exc
 
-        prompt = _USER_PROMPT.format(
-            title=task.get("title", "Untitled task"),
-            est_min=task.get("est_min", "unknown"),
-            scheduled_date=task.get("scheduled_date", "unknown"),
-            commitment=task.get("commitment_title") or "None",
-            status=task.get("status", "unknown"),
-            instruction=(instruction or "No extra instruction supplied.").strip(),
-        )
+        context = build_execution_context(task, instruction)
         messages = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
+            {
+                "role": "system",
+                "content": (
+                    f"{_SYSTEM_PROMPT}\n\n"
+                    "--- OWNER-SCOPED TASK CONTEXT ---\n"
+                    f"{context}"
+                ),
+            },
+            {"role": "user", "content": _USER_PROMPT},
         ]
         try:
             response = await self._llm.chat(messages)

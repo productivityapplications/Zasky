@@ -252,7 +252,7 @@ approving records.
 | `GET` | `/api/dashboard/commitments` | Month commitments with linked goal titles |
 | `POST` | `/api/dashboard/commitments` | Create a month commitment, optionally linked to a goal |
 | `POST` | `/api/dashboard/tasks` | Add a task to the current week pool; links a commitment or creates an ad hoc task |
-| `POST` | `/api/dashboard/delegate/{task_id}` | Start the two-step Execution Sub-Agent flow and return its structured output plus execution code |
+| `POST` | `/api/dashboard/delegate/{task_id}` | Start the two-step Execution Sub-Agent flow with optional `instruction`, returning structured output plus execution code |
 | `POST` | `/api/dashboard/executions/{execution_code}/approve` | Owner sign-off that marks the delegated task complete in Postgres |
 
 Goal and commitment creation uses `propose_record` followed by the same
@@ -260,7 +260,9 @@ deterministic `resolve_proposal` path as chat. Task creation uses
 `DomainService.add_week_task`, which appends to an existing placement instead of
 creating a duplicate placement. Delegation uses a tool-free LLM call with the
 existing cost guard and does not mutate planning state until the owner approves
-the execution code.
+the execution code. The prompt is assembled from the task, parent month
+commitment, parent year goal and evidence of done, any resume note, and the
+optional owner instruction.
 
 ```json
 {
@@ -300,6 +302,20 @@ Authorization: Bearer <DASHBOARD_API_KEY>
 
 or the owner sends `approve execution ZK-9K2M` in Discord. Both paths use the
 same deterministic delegation record and `DomainService.complete_task`.
+
+Optional dashboard instruction:
+
+```json
+{
+  "instruction": "Use a casual tone and keep the draft under 200 words."
+}
+```
+
+Discord accepts the same suffix:
+
+```text
+delegate ZK-9K2M Use a casual tone and keep the draft under 200 words.
+```
 
 ### Calendar feed and Google Calendar links
 

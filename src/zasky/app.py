@@ -638,7 +638,9 @@ class ZaskyApp:
         task_title = _escape_md(str(started["task_title"]))
         try:
             result = await self.delegate_task(
-                task_id, execution_code=execution_code
+                task_id,
+                instruction=command.instructions,
+                execution_code=execution_code,
             )
         except ExecutionSubAgentError as exc:
             await self.delegations.mark_failed(execution_code, exc.code)

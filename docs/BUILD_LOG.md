@@ -1,5 +1,17 @@
 # Zasky Build Log
 
+## 2026-11-07 — Execution context assembly
+
+- Added `DelegationContext` assembly through `DomainService.task_detail`: task,
+  estimate, parent commitment, parent year goal, evidence of done, resume note,
+  commitment priority/deadline/consequence and owner instructions.
+- Execution Agent system prompt now carries the full context and requires
+  explicit missing-context notes in the Verification Checklist.
+- `delegate ZK-XXXX [instructions]` now parses and forwards the optional suffix.
+- Dashboard Confirm Delegation modal has an optional Additional Context /
+  Instructions textarea passed to the delegate API.
+- Tests: **158 passed**; `ruff` clean; `mypy src` clean; `npm run build` clean.
+
 ## 2026-11-07 — Tailwind redesign and human-in-the-loop delegation
 
 - Replaced the legacy dark dashboard with the approved three-column Tailwind

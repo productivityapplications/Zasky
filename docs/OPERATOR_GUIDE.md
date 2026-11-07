@@ -106,6 +106,16 @@ Please review the deliverable above. If this meets your standards, reply
 `approve execution ZK-YYYY` to mark the task complete.
 ```
 
+You can add instructions after the code:
+
+```text
+delegate ZK-XXXX Use a casual tone and keep it under 200 words.
+```
+
+The Execution Agent receives the task title and estimate, parent commitment,
+year goal and evidence of done, any resume note, and those instructions. If the
+context is insufficient, the Verification Checklist names what is missing.
+
 Only `approve execution ZK-YYYY` marks the task complete. Natural language such
 as "looks good" does not.
 

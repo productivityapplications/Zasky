@@ -14,7 +14,8 @@ _COMMAND_RE = re.compile(
     re.IGNORECASE,
 )
 _DELEGATE_RE = re.compile(
-    r"^delegate\s+(?P<code>ZK-[A-Z0-9]{4})$", re.IGNORECASE
+    r"^delegate\s+(?P<code>ZK-[A-Z0-9]{4})(?:\s+(?P<instructions>.+))?$",
+    re.IGNORECASE,
 )
 _APPROVE_EXECUTION_RE = re.compile(
     r"^approve\s+execution\s+(?P<code>ZK-[A-Z0-9]{4})$", re.IGNORECASE
@@ -31,6 +32,7 @@ _CONVERSATIONAL_RE = re.compile(
 class ApprovalCommand:
     action: str
     code: str | None
+    instructions: str | None = None
 
 
 def is_conversational_approval(text: str) -> bool:
@@ -49,9 +51,11 @@ def parse_approval_command(text: str) -> ApprovalCommand | None:
         )
     delegation = _DELEGATE_RE.fullmatch(normalized)
     if delegation is not None:
+        instructions = delegation.group("instructions")
         return ApprovalCommand(
             action="delegate",
             code=delegation.group("code").upper(),
+            instructions=instructions.strip() if instructions else None,
         )
     match = _COMMAND_RE.fullmatch(normalized)
     if match is None:

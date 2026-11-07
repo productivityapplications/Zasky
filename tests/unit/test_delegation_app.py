@@ -14,7 +14,11 @@ from zasky.switch.events import MessageEvent
 
 
 class FakeExecution:
+    def __init__(self) -> None:
+        self.instructions: list[str | None] = []
+
     async def run(self, *, task, instruction=None):
+        self.instructions.append(instruction)
         return {
             "output": (
                 "## 1. The Deliverable\n\nSynthetic draft.\n\n"
@@ -108,13 +112,22 @@ async def test_delegate_command_runs_subagent_and_signoff_completes_task(
         assert code is not None
 
         reply, outcome = await app._handle_delegate_command(
-            ApprovalCommand(action="delegate", code=code.group(1)),
+            ApprovalCommand(
+                action="delegate",
+                code=code.group(1),
+                instructions="Use a casual tone and keep it under 90 seconds.",
+            ),
             event(),
         )
         assert outcome == "approval_applied"
         assert "Execution ready" in reply
         execution = re.search(r"approve execution (ZK-[A-Z0-9]{4})", reply)
         assert execution is not None
+        fake_execution = app.execution
+        assert isinstance(fake_execution, FakeExecution)
+        assert fake_execution.instructions == [
+            "Use a casual tone and keep it under 90 seconds."
+        ]
         fake_discord = app.discord
         assert isinstance(fake_discord, FakeDiscord)
         assert fake_discord.results
