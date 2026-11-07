@@ -47,8 +47,8 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | Pending push of calendar release commit |
-| Current Git commit | Pending calendar release commit |
+| Deployed commit | `36cea38` (calendar feed + Google Calendar links) |
+| Current Git commit | `36cea38` plus docs checkpoint |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 151 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
