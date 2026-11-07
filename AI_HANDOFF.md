@@ -47,8 +47,8 @@
 | Preview/staging authority | Verified VPS staging; Vercel dashboard deployed and working |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel dashboard deployed |
-| Deployed commit | Pending redesign/delegation release commit |
-| Current Git commit | `36cea38` plus docs checkpoint |
+| Deployed commit | `4c14771` (Tailwind redesign + delegation sign-off) |
+| Current Git commit | `4c14771` plus docs checkpoint |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 158 tests pass; live model/tool E2E; live Discord round-trip; live dashboard read/publish; dashboard creation and delegation tests |
