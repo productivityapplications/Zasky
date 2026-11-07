@@ -47,8 +47,8 @@
 | Preview/staging authority | Verified VPS staging; Vercel deployment pending operator |
 | Production authority | Not granted |
 | Current preview URL | VPS dashboard API `http://VPS_IP:8100`; Vercel URL pending |
-| Deployed commit | `b52cfdb` runtime; Discord routing pending operator channel IDs |
-| Current Git commit | `562636a` |
+| Deployed commit | `0f2bd14` (Discord routing code; channel IDs pending operator setup) |
+| Current Git commit | `0f2bd14` |
 | UI reference asset | Not applicable; dashboard has no supplied reference image |
 | `stageshow` skill | Not used |
 | Unit/integration/E2E evidence | 136 tests pass; live model/tool E2E; live Discord round-trip; live dashboard API read/write; Discord notifier routing tests |
