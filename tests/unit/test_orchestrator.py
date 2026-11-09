@@ -463,6 +463,77 @@ async def test_empty_schedule_gets_specific_message(orchestrator_env) -> None:
     )
 
 
+def test_plan_day_template_explains_unselected_tasks_and_low_battery() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "plan_day",
+        {
+            "proposal": "ZK-LOW1",
+            "payload": {
+                "date": "2026-11-06",
+                "battery": "low",
+                "items": [
+                    {
+                        "task_title": "Send the launch email",
+                        "disposition": "must",
+                        "planned_est_min": 45,
+                    },
+                    {
+                        "task_title": "Check the final checklist",
+                        "disposition": "should",
+                        "planned_est_min": 15,
+                    },
+                ],
+                "week_pool_active_count": 11,
+                "not_selected_count": 9,
+                "selected_est_min_total": 60,
+                "latest_wake_display": "07:30",
+            },
+        },
+    )
+    assert (
+        "You have 9 other active tasks in your week pool." in detail
+    )
+    assert "I cap plans at 3 tasks (2 on low battery)" in detail
+    assert "I've left them in the queue for another day." in detail
+    assert (
+        "I kept your plan light today to protect your energy." in detail
+    )
+    assert (
+        "Since your battery is low, I selected only one MUST and one "
+        "short SHOULD task." in detail
+    )
+
+
+def test_plan_day_template_omits_transparency_note_when_pool_is_empty() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "plan_day",
+        {
+            "proposal": "ZK-CLEAN",
+            "payload": {
+                "date": "2026-11-06",
+                "battery": "medium",
+                "items": [
+                    {
+                        "task_title": "Record the demo narration",
+                        "disposition": "must",
+                        "planned_est_min": 120,
+                    },
+                ],
+                "not_selected_count": 0,
+                "selected_est_min_total": 120,
+                "latest_wake_display": "07:30",
+            },
+        },
+    )
+    assert "other active task" not in detail
+    assert "kept your plan light" not in detail
+    assert "battery is low" not in detail
+
+
 @pytest.mark.asyncio
 async def test_battery_clarification_explains_without_model(orchestrator_env) -> None:
     db, settings = orchestrator_env

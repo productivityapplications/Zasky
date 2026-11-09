@@ -414,6 +414,21 @@
 - Tests: **165 passed**; `ruff` clean; `mypy src` clean; local Markdown links
   checked with 0 broken targets.
 
+## 2026-11-09 — Day-plan transparency
+
+- Added deterministic day-plan payload counts: `week_pool_active_count`,
+  `not_selected_count`, `selected_est_min_total` and `task_cap`.
+- Added `plan_transparency_notes` for proposal and Daily Briefing templates:
+  unselected week-pool count, 3-task cap (2 on low battery), the light-plan
+  message at ≤90 selected minutes, and the low-battery one-MUST/one-SHOULD
+  clarification.
+- Updated the system prompt so plan responses cannot imply every task was
+  scheduled and must preserve the application-supplied notes.
+- Fixed dashboard task creation to infer the week from `scheduled_date` rather
+  than always using the current week.
+- Tests: **169 passed**; `ruff` clean; `mypy src` clean; live container rebuild
+  and health ready.
+
 ## Checkpoint template
 
 ```text

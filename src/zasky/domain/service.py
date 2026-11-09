@@ -901,6 +901,16 @@ class DomainService:
                 raise DomainError(
                     "CAPACITY_EXCEEDED", "No selected task could be given a time block."
                 )
+            selected_ids = {str(item["task_id"]) for item in items}
+            active_week_tasks = [
+                task for task, _commitment in pool if task.status == "active"
+            ]
+            not_selected_count = sum(
+                1 for task in active_week_tasks if task.id not in selected_ids
+            )
+            selected_est_min_total = sum(
+                int(str(item["planned_est_min"])) for item in items
+            )
             first_start = min(
                 [datetime.fromisoformat(str(item["planned_start_utc"])) for item in items]
                 + [
@@ -916,6 +926,10 @@ class DomainService:
                     "date": request.date.isoformat(),
                     "battery": request.battery,
                     "items": items,
+                    "week_pool_active_count": len(active_week_tasks),
+                    "not_selected_count": not_selected_count,
+                    "selected_est_min_total": selected_est_min_total,
+                    "task_cap": 2 if request.battery == "low" else 3,
                     "unplaced": unplaced,
                     "first_required_start_utc": plan.first_required_start_utc.isoformat(),
                     "latest_wake_utc": plan.latest_wake_utc.isoformat(),
@@ -1087,9 +1101,18 @@ class DomainService:
         async with self._db.locked_session() as session:
             config = await self._config(session)
             today = datetime.now(_UTC).astimezone(ZoneInfo(config.timezone)).date()
-            selected_week = week_start or week_start_for(
-                today, config.week_start_weekday
-            )
+            if week_start is not None:
+                selected_week = week_start
+            elif scheduled_date is not None:
+                # A dashboard task submitted for a date belongs in that date's
+                # week, even when the date is not in the current week.
+                selected_week = week_start_for(
+                    scheduled_date, config.week_start_weekday
+                )
+            else:
+                selected_week = week_start_for(
+                    today, config.week_start_weekday
+                )
             normalized_week = week_start_for(
                 selected_week, config.week_start_weekday
             )

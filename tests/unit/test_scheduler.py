@@ -30,7 +30,9 @@ class FakeOps:
         return {"event_id": "posted"}
 
 
-async def seed_plan(db: Database, *, start_utc: datetime) -> tuple[str, str]:
+async def seed_plan(
+    db: Database, *, start_utc: datetime, extra_task: bool = False
+) -> tuple[str, str]:
     async with db.locked_session() as session:
         placement = WeekPlacement(
             id="placement-1",
@@ -73,6 +75,19 @@ async def seed_plan(db: Database, *, start_utc: datetime) -> tuple[str, str]:
         session.add(placement)
         await session.flush()
         session.add(task)
+        if extra_task:
+            session.add(
+                WeekTask(
+                    id="task-2",
+                    placement_id=placement.id,
+                    title="Unselected week-pool task",
+                    est_min=30,
+                    scheduled_date=date(2026, 11, 6),
+                    status="active",
+                    ad_hoc=True,
+                    execution_type="human",
+                )
+            )
         await session.flush()
         session.add(plan)
         await session.flush()
@@ -159,6 +174,28 @@ async def test_briefing_is_formatted_and_has_fixed_events(tmp_path, settings: Se
         assert "📅 **Add to Google Calendar:**" in briefing
         assert "calendar.google.com/calendar/render" in briefing
         assert "action=TEMPLATE" in briefing
+    finally:
+        await db.close()
+        await asyncio.sleep(0.2)
+
+
+@pytest.mark.asyncio
+async def test_briefing_explains_unselected_week_pool(
+    tmp_path, settings: Settings
+) -> None:
+    db = Database(f"sqlite+aiosqlite:///{tmp_path / 'brief-notes.db'}")
+    await db.init()
+    start = datetime(2026, 11, 6, 8, 0, tzinfo=UTC)
+    try:
+        await seed_plan(db, start_utc=start, extra_task=True)
+        briefing = await BriefingBuilder(db, settings).build(date(2026, 11, 6))
+        assert (
+            "You have 1 other active task in your week pool." in briefing
+        )
+        assert "I cap plans at 3 tasks" in briefing
+        assert (
+            "I kept your plan light today to protect your energy." in briefing
+        )
     finally:
         await db.close()
         await asyncio.sleep(0.2)

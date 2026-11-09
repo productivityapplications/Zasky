@@ -12,11 +12,18 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from zasky.agent.plan_notes import plan_transparency_notes
 from zasky.config import Settings
 from zasky.integrations.calendar import google_calendar_day_quick_add_url
-from zasky.planner.core import as_utc
+from zasky.planner.core import as_utc, week_start_for
 from zasky.storage.database import Database
-from zasky.storage.models import DayPlan, DayPlanItem, FixedEvent, WeekTask
+from zasky.storage.models import (
+    DayPlan,
+    DayPlanItem,
+    FixedEvent,
+    WeekPlacement,
+    WeekTask,
+)
 
 
 def _escape_md(text: str) -> str:
@@ -63,6 +70,34 @@ class BriefingBuilder:
                     .order_by(DayPlanItem.position)
                 )
             ).all()
+            week_start = week_start_for(
+                local_date, self._settings.week_start_day
+            )
+            active_week_task_ids = set(
+                (
+                    await session.execute(
+                        select(WeekTask.id)
+                        .join(
+                            WeekPlacement,
+                            WeekTask.placement_id == WeekPlacement.id,
+                        )
+                        .where(
+                            WeekPlacement.week_start == week_start,
+                            WeekPlacement.status == "active",
+                            WeekTask.status == "active",
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            selected_task_ids = {task.id for _item, task in rows}
+            not_selected_count = len(
+                active_week_task_ids - selected_task_ids
+            )
+            selected_est_min_total = sum(
+                item.planned_est_min for item, _task in rows
+            )
             events = (
                 await session.execute(
                     select(FixedEvent).where(FixedEvent.status == "active")
@@ -102,6 +137,15 @@ class BriefingBuilder:
                     f"{_display_time(event.starts_at_utc, tz)}–"
                     f"{_display_time(event.ends_at_utc, tz)}"
                 )
+        notes = plan_transparency_notes(
+            battery=plan.battery,
+            must_count=len(must),
+            should_count=len(should),
+            selected_est_min_total=selected_est_min_total,
+            not_selected_count=not_selected_count,
+        )
+        if notes:
+            lines.extend(["", *notes])
         lines.extend(
             [
                 "",

@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from zasky.agent.context import ContextBuilder
+from zasky.agent.plan_notes import plan_transparency_notes
 from zasky.config import Settings
 from zasky.domain.errors import DomainError
 from zasky.domain.schemas import (
@@ -588,6 +589,20 @@ class AgentOrchestrator:
                 )
             if not should:
                 lines.append("- None")
+            selected_est_min_total = payload.get("selected_est_min_total")
+            if not isinstance(selected_est_min_total, int):
+                selected_est_min_total = sum(
+                    int(item.get("planned_est_min") or 0) for item in items
+                )
+            notes = plan_transparency_notes(
+                battery=str(payload.get("battery") or "medium"),
+                must_count=len(must),
+                should_count=len(should),
+                selected_est_min_total=selected_est_min_total,
+                not_selected_count=int(payload.get("not_selected_count") or 0),
+            )
+            if notes:
+                lines.extend(["", *notes])
             lines.extend(
                 [
                     "",
