@@ -190,9 +190,10 @@ async def test_briefing_explains_unselected_week_pool(
         await seed_plan(db, start_utc=start, extra_task=True)
         briefing = await BriefingBuilder(db, settings).build(date(2026, 11, 6))
         assert (
-            "You have 1 other active task in your week pool." in briefing
+            "I've scheduled your top task. You have 1 more task in the queue."
+            in briefing
         )
-        assert "I cap plans at 3 tasks" in briefing
+        assert 'Reply "override limits" if you want me to schedule all of them.' in briefing
         assert (
             "I kept your plan light today to protect your energy." in briefing
         )

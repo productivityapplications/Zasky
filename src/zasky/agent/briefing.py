@@ -73,27 +73,29 @@ class BriefingBuilder:
             week_start = week_start_for(
                 local_date, self._settings.week_start_day
             )
-            active_week_task_ids = set(
-                (
-                    await session.execute(
-                        select(WeekTask.id)
-                        .join(
-                            WeekPlacement,
-                            WeekTask.placement_id == WeekPlacement.id,
-                        )
-                        .where(
-                            WeekPlacement.week_start == week_start,
-                            WeekPlacement.status == "active",
-                            WeekTask.status == "active",
-                        )
+            active_week_tasks = (
+                await session.execute(
+                    select(WeekTask)
+                    .join(
+                        WeekPlacement,
+                        WeekTask.placement_id == WeekPlacement.id,
+                    )
+                    .where(
+                        WeekPlacement.week_start == week_start,
+                        WeekPlacement.status == "active",
+                        WeekTask.status == "active",
                     )
                 )
-                .scalars()
-                .all()
-            )
+            ).scalars().all()
             selected_task_ids = {task.id for _item, task in rows}
-            not_selected_count = len(
-                active_week_task_ids - selected_task_ids
+            day_task_ids = {
+                task.id
+                for task in active_week_tasks
+                if task.scheduled_date == local_date
+            }
+            not_selected_count = len(day_task_ids - selected_task_ids)
+            week_pool_not_selected_count = len(
+                {task.id for task in active_week_tasks} - selected_task_ids
             )
             selected_est_min_total = sum(
                 item.planned_est_min for item, _task in rows
@@ -137,12 +139,16 @@ class BriefingBuilder:
                     f"{_display_time(event.starts_at_utc, tz)}–"
                     f"{_display_time(event.ends_at_utc, tz)}"
                 )
+        normal_cap = 2 if plan.battery == "low" else 3
         notes = plan_transparency_notes(
             battery=plan.battery,
             must_count=len(must),
             should_count=len(should),
+            selected_count=len(rows),
             selected_est_min_total=selected_est_min_total,
             not_selected_count=not_selected_count,
+            week_pool_not_selected_count=week_pool_not_selected_count,
+            override_limits=len(rows) > normal_cap,
         )
         if notes:
             lines.extend(["", *notes])

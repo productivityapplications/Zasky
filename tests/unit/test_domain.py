@@ -315,6 +315,55 @@ async def test_low_battery_plan_reports_remaining_week_pool(domain_env) -> None:
 
 
 @pytest.mark.asyncio
+async def test_override_schedules_all_day_tasks_and_warns(domain_env) -> None:
+    _db, service, _settings = domain_env
+    goal = await create_goal(service)
+    await approve(service, goal)
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    commitment = await create_commitment(
+        service, goal_id=goals["goals"][0]["id"]
+    )
+    await approve(service, commitment)
+    commitments = await service.query(
+        QueryRequest(state="month", horizon="2027-01")
+    )
+    commitment_id = commitments["commitments"][0]["id"]
+    tasks = [
+        PlaceWeekTask(
+            commitment_id=commitment_id,
+            task_title=f"Override task {index}",
+            est_min=15,
+            scheduled_date=date(2026, 11, 6),
+        )
+        for index in range(11)
+    ]
+    week = await create_week(service, commitment_id, tasks=tasks)
+    await approve(service, week)
+    plan = await service.propose_day(
+        PlanDayRequest(
+            date=date(2026, 11, 6),
+            battery="medium",
+            override_limits=True,
+        )
+    )
+    payload = plan["payload"]
+    assert payload["override_limits"] is True
+    assert len(payload["items"]) == 11
+    assert (
+        sum(
+            1
+            for item in payload["items"]
+            if item["disposition"] == "must"
+        )
+        == 1
+    )
+    assert payload["not_selected_count"] == 0
+    assert payload["unplaced_count"] == 0
+    assert payload["selected_est_min_total"] == 165
+    assert payload["daily_available_min"] == 480
+
+
+@pytest.mark.asyncio
 async def test_park_requires_note_and_complete_is_idempotent(domain_env) -> None:
     _db, service, _settings = domain_env
     goal = await create_goal(service)

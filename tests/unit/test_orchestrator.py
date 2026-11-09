@@ -328,6 +328,8 @@ def test_prompt_has_conversational_approval_guard() -> None:
     assert "I cannot accept conversational approvals" in prompt
     assert "call `plan_day`" in prompt
     assert "Never calculate the calendar date yourself" in prompt
+    assert "protective assistant by default" in prompt
+    assert "override_limits=true" in prompt
 
 
 def test_plan_day_template_is_discord_ready() -> None:
@@ -493,10 +495,10 @@ def test_plan_day_template_explains_unselected_tasks_and_low_battery() -> None:
         },
     )
     assert (
-        "You have 9 other active tasks in your week pool." in detail
+        "I've scheduled your top 2 tasks. You have 9 more tasks in the queue."
+        in detail
     )
-    assert "I cap plans at 3 tasks (2 on low battery)" in detail
-    assert "I've left them in the queue for another day." in detail
+    assert 'Reply "override limits" if you want me to schedule all of them.' in detail
     assert (
         "I kept your plan light today to protect your energy." in detail
     )
@@ -504,6 +506,100 @@ def test_plan_day_template_explains_unselected_tasks_and_low_battery() -> None:
         "Since your battery is low, I selected only one MUST and one "
         "short SHOULD task." in detail
     )
+
+
+def test_plan_day_default_offers_override_after_top_three() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "plan_day",
+        {
+            "proposal": "ZK-TOP3",
+            "payload": {
+                "date": "2026-11-06",
+                "battery": "medium",
+                "items": [
+                    {
+                        "task_title": "First task",
+                        "disposition": "must",
+                        "planned_est_min": 30,
+                    },
+                    {
+                        "task_title": "Second task",
+                        "disposition": "should",
+                        "planned_est_min": 30,
+                    },
+                    {
+                        "task_title": "Third task",
+                        "disposition": "should",
+                        "planned_est_min": 30,
+                    },
+                ],
+                "selected_count": 3,
+                "selected_est_min_total": 90,
+                "not_selected_count": 8,
+                "latest_wake_display": "07:30",
+            },
+        },
+    )
+    assert (
+        "I've scheduled your top 3 tasks. You have 8 more tasks in the queue. "
+        'Reply "override limits" if you want me to schedule all of them.'
+        in detail
+    )
+    assert (
+        "I kept your plan light today to protect your energy." in detail
+    )
+    assert "override_limits" not in detail
+
+
+def test_plan_day_template_warns_when_override_exceeds_daily_hours() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "plan_day",
+        {
+            "proposal": "ZK-OVR1",
+            "payload": {
+                "date": "2026-11-06",
+                "battery": "medium",
+                "override_limits": True,
+                "items": [
+                    {
+                        "task_title": "Push through the launch",
+                        "disposition": "must",
+                        "planned_est_min": 420,
+                    },
+                    {
+                        "task_title": "Finish the remaining work",
+                        "disposition": "should",
+                        "planned_est_min": 420,
+                    },
+                ],
+                "selected_count": 2,
+                "selected_est_min_total": 840,
+                "daily_available_min": 480,
+                "not_selected_count": 0,
+                "unplaced_count": 0,
+                "latest_wake_display": "07:30",
+            },
+        },
+    )
+    assert (
+        "⚠️ Override active: You have 14 hours of tasks and 8 hours "
+        "available. I scheduled them all, but you may not finish." in detail
+    )
+    assert 'Reply "override limits"' not in detail
+
+
+def test_explicit_override_commands_only() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    assert AgentOrchestrator._explicit_override("override limits")
+    assert AgentOrchestrator._explicit_override("ignore the limit")
+    assert AgentOrchestrator._explicit_override("schedule all my tasks")
+    assert not AgentOrchestrator._explicit_override("don't override limits")
+    assert not AgentOrchestrator._explicit_override("keep the limit")
 
 
 def test_plan_day_template_omits_transparency_note_when_pool_is_empty() -> None:

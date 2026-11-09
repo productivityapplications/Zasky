@@ -429,6 +429,20 @@
 - Tests: **169 passed**; `ruff` clean; `mypy src` clean; live container rebuild
   and health ready.
 
+## 2026-11-09 — Explicit day-plan override
+
+- Added `override_limits: bool = False` to the `plan_day` tool contract.
+- Default plans still enforce the battery-shaped 1 MUST / 3-task cap and now
+  offer: "Reply `override limits` if you want me to schedule all of them."
+- Override mode schedules every active task for that date, preserves exactly one
+  MUST, and still protects fixed events. It uses a full-day scheduler that
+  starts at the earliest availability time and can run past the normal window.
+- Added a deterministic capacity warning when override tasks exceed the day's
+  available minutes, e.g. 14 hours of tasks vs 8 hours available.
+- The system prompt now states that Zasky is protective by default and may only
+  enable override on an explicit owner command.
+- Tests: **174 passed**; `ruff` clean; `mypy src` clean.
+
 ## Checkpoint template
 
 ```text

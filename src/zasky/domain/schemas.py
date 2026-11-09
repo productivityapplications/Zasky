@@ -87,6 +87,7 @@ class PlaceWeekRequest(StrictModel):
 class PlanDayRequest(StrictModel):
     date: date
     battery: Battery
+    override_limits: bool = False
 
 
 class ReconcileRequest(StrictModel):
@@ -159,7 +160,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
         "name": "plan_day",
         "description": (
             "Propose a day plan from active approved week-pool tasks for one "
-            "date, including battery shaping and backplan."
+            "date, including battery shaping and backplan. Set "
+            "override_limits=true only when the owner explicitly says "
+            "'override limits', 'ignore the limit', or 'schedule all my tasks'."
         ),
         "parameters": PlanDayRequest.model_json_schema(),
     },

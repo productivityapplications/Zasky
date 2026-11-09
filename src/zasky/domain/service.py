@@ -33,6 +33,7 @@ from zasky.planner.core import (
     daily_capacity,
     month_capacity,
     remaining_week_capacity,
+    schedule_override_tasks,
     schedule_tasks,
     week_capacity,
     week_feasibility,
@@ -836,44 +837,58 @@ class DomainService:
                     pair[0].created_at,
                 ),
             )
+            daily = daily_capacity(request.date, config, fixed_events)
             limit = 2 if request.battery == "low" else 3
             selected: list[tuple[WeekTask, MonthCommitment | None]] = []
             unplaced: list[str] = []
-            for task, commitment in ranked:
-                if len(selected) >= limit:
-                    break
-                if request.battery == "low" and selected and task.est_min > 30:
-                    continue
-                trial = selected + [(task, commitment)]
-                scheduled = schedule_tasks(
+            if request.override_limits:
+                selected = list(ranked)
+                schedule = schedule_override_tasks(
                     request.date,
-                    [(item[0].id, item[0].est_min) for item in trial],
+                    [(task.id, task.est_min) for task, _commitment in selected],
                     config,
                     fixed_events,
                 )
-                if task.id in scheduled.unplaced:
-                    unplaced.append(task.id)
-                    continue
-                selected = trial
-            if not selected:
-                raise DomainError(
-                    "CAPACITY_EXCEEDED",
-                    "None of that date's tasks fit in the remaining availability.",
-                    details={"unplaced": unplaced},
+                unplaced = list(schedule.unplaced)
+            else:
+                for task, commitment in ranked:
+                    if len(selected) >= limit:
+                        break
+                    if request.battery == "low" and selected and task.est_min > 30:
+                        continue
+                    trial = selected + [(task, commitment)]
+                    trial_schedule = schedule_tasks(
+                        request.date,
+                        [(item[0].id, item[0].est_min) for item in trial],
+                        config,
+                        fixed_events,
+                    )
+                    if task.id in trial_schedule.unplaced:
+                        unplaced.append(task.id)
+                        continue
+                    selected = trial
+                if not selected:
+                    raise DomainError(
+                        "CAPACITY_EXCEEDED",
+                        "None of that date's tasks fit in the remaining availability.",
+                        details={"unplaced": unplaced},
+                    )
+                schedule = schedule_tasks(
+                    request.date,
+                    [(task.id, task.est_min) for task, _commitment in selected],
+                    config,
+                    fixed_events,
                 )
-            schedule = schedule_tasks(
-                request.date,
-                [(task.id, task.est_min) for task, _commitment in selected],
-                config,
-                fixed_events,
-            )
             scheduled_by_id = {item.task_id: item for item in schedule.scheduled}
             items = []
-            for position, (task, _commitment) in enumerate(selected, start=1):
+            position = 0
+            for task, _commitment in selected:
                 block = scheduled_by_id.get(task.id)
                 if block is None:
-                    unplaced.append(task.id)
+                    if task.id not in unplaced:
+                        unplaced.append(task.id)
                     continue
+                position += 1
                 items.append(
                     {
                         "task_id": task.id,
@@ -906,6 +921,9 @@ class DomainService:
                 task for task, _commitment in pool if task.status == "active"
             ]
             not_selected_count = sum(
+                1 for task, _commitment in candidates if task.id not in selected_ids
+            )
+            week_pool_not_selected_count = sum(
                 1 for task in active_week_tasks if task.id not in selected_ids
             )
             selected_est_min_total = sum(
@@ -925,11 +943,20 @@ class DomainService:
                 payload={
                     "date": request.date.isoformat(),
                     "battery": request.battery,
+                    "override_limits": request.override_limits,
                     "items": items,
+                    "day_task_count": len(candidates),
+                    "selected_count": len(items),
                     "week_pool_active_count": len(active_week_tasks),
                     "not_selected_count": not_selected_count,
+                    "week_pool_not_selected_count": (
+                        week_pool_not_selected_count
+                    ),
                     "selected_est_min_total": selected_est_min_total,
+                    "daily_available_min": daily.available_min,
+                    "daily_budget_min": daily.budget_min,
                     "task_cap": 2 if request.battery == "low" else 3,
+                    "unplaced_count": len(unplaced),
                     "unplaced": unplaced,
                     "first_required_start_utc": plan.first_required_start_utc.isoformat(),
                     "latest_wake_utc": plan.latest_wake_utc.isoformat(),

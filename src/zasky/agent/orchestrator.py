@@ -343,6 +343,10 @@ class AgentOrchestrator:
                 if re.search(rf"\b{battery}\b", lowered):
                     arguments["battery"] = battery
                     break
+            if self._explicit_override(text):
+                arguments["override_limits"] = True
+            elif arguments.get("override_limits"):
+                arguments["override_limits"] = False
         elif name == "reconcile":
             parsed_date = self._date_from_text(text)
             parsed_time = self._time_from_text(text)
@@ -426,6 +430,29 @@ class AgentOrchestrator:
             return await self._domain.query(QueryRequest.model_validate(arguments))
         raise DomainError("INVALID_INPUT", "Unknown tool.")
 
+    @staticmethod
+    def _explicit_override(text: str) -> bool:
+        """True only for an explicit command to bypass the task cap."""
+        lowered = text.lower()
+        if re.search(
+            r"\b(?:don't|do not|no|not|without|keep)\b[^.\n]{0,30}"
+            r"\b(?:override|ignore|schedule all)\b",
+            lowered,
+        ):
+            return False
+        return any(
+            phrase in lowered
+            for phrase in (
+                "override limits",
+                "override limit",
+                "ignore the limit",
+                "ignore limits",
+                "schedule all my tasks",
+                "schedule all tasks",
+                "schedule everything",
+            )
+        )
+
     def _looks_like_plan_request(self, text: str) -> bool:
         lowered = text.lower()
         if "left this week" in lowered or "what is left" in lowered:
@@ -454,6 +481,7 @@ class AgentOrchestrator:
                 PlanDayRequest(
                     date=parsed_date,
                     battery=cast(Literal["low", "medium", "high"], battery),
+                    override_limits=self._explicit_override(text),
                 )
             )
         except DomainError as exc:
@@ -594,12 +622,26 @@ class AgentOrchestrator:
                 selected_est_min_total = sum(
                     int(item.get("planned_est_min") or 0) for item in items
                 )
+            daily_available_min = payload.get("daily_available_min")
+            if not isinstance(daily_available_min, int):
+                daily_available_min = None
+            unplaced = payload.get("unplaced", [])
+            unplaced_count = payload.get("unplaced_count")
+            if not isinstance(unplaced_count, int):
+                unplaced_count = len(unplaced) if isinstance(unplaced, list) else 0
             notes = plan_transparency_notes(
                 battery=str(payload.get("battery") or "medium"),
                 must_count=len(must),
                 should_count=len(should),
+                selected_count=len(items),
                 selected_est_min_total=selected_est_min_total,
                 not_selected_count=int(payload.get("not_selected_count") or 0),
+                week_pool_not_selected_count=int(
+                    payload.get("week_pool_not_selected_count") or 0
+                ),
+                override_limits=bool(payload.get("override_limits")),
+                daily_available_min=daily_available_min,
+                unplaced_count=unplaced_count,
             )
             if notes:
                 lines.extend(["", *notes])

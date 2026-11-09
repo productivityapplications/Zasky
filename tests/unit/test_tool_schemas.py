@@ -29,6 +29,21 @@ def test_exactly_seven_domain_tools() -> None:
     assert len(tool_names()) == 7
 
 
+def test_override_limits_defaults_false() -> None:
+    request = PlanDayRequest.model_validate(
+        {"date": "2026-11-06", "battery": "medium"}
+    )
+    assert request.override_limits is False
+    explicit = PlanDayRequest.model_validate(
+        {
+            "date": "2026-11-06",
+            "battery": "medium",
+            "override_limits": True,
+        }
+    )
+    assert explicit.override_limits is True
+
+
 def test_unknown_tool_fields_are_rejected() -> None:
     with pytest.raises(ValidationError):
         PlanDayRequest.model_validate(

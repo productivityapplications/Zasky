@@ -246,18 +246,10 @@ def remaining_week_capacity(
     return Capacity(available_min=available, budget_min=budget, slack_min=available - budget)
 
 
-def schedule_tasks(
-    local_date: date,
+def _schedule_greedy(
+    intervals: list[Interval],
     tasks: list[tuple[str, int]],
-    config: OwnerConfig,
-    fixed_events: list[FixedEvent],
-    *,
-    not_before: datetime | None = None,
 ) -> ScheduleResult:
-    """Greedy whole-task placement; tasks are never split or compressed."""
-    intervals = free_intervals(
-        local_date, config, fixed_events, not_before=not_before
-    )
     scheduled: list[ScheduledItem] = []
     unplaced: list[str] = []
     for task_id, estimate in tasks:
@@ -285,6 +277,54 @@ def schedule_tasks(
         if not placed:
             unplaced.append(task_id)
     return ScheduleResult(scheduled=scheduled, unplaced=unplaced)
+
+
+def schedule_tasks(
+    local_date: date,
+    tasks: list[tuple[str, int]],
+    config: OwnerConfig,
+    fixed_events: list[FixedEvent],
+    *,
+    not_before: datetime | None = None,
+) -> ScheduleResult:
+    """Greedy whole-task placement; tasks are never split or compressed."""
+    intervals = free_intervals(
+        local_date, config, fixed_events, not_before=not_before
+    )
+    return _schedule_greedy(intervals, tasks)
+
+
+def schedule_override_tasks(
+    local_date: date,
+    tasks: list[tuple[str, int]],
+    config: OwnerConfig,
+    fixed_events: list[FixedEvent],
+) -> ScheduleResult:
+    """Place every task in the day, ignoring the normal availability window.
+
+    Override mode still protects fixed events. It starts at the earliest
+    configured availability time (or 08:00 when none is configured) and uses
+    the rest of the local day, so a deliberately overloaded plan can be laid
+    out and warned about rather than silently compressed or truncated.
+    """
+    tz = zone(config)
+    windows = parse_availability(config).get(
+        WEEKDAYS[local_date.weekday()], []
+    )
+    if windows:
+        start = min(_local_bounds(local_date, window, tz).start for window in windows)
+    else:
+        start = datetime.combine(local_date, time(8, 0), tzinfo=tz)
+    end = datetime.combine(
+        local_date + timedelta(days=1), time(0, 0), tzinfo=tz
+    )
+    cuts = [
+        _event_blocks(event, tz, config.transition_buffer_min)
+        for event in fixed_events
+        if _fixed_local(event, tz).start.date() == local_date
+    ]
+    intervals = _subtract(Interval(start, end), cuts)
+    return _schedule_greedy(intervals, tasks)
 
 
 @dataclass(frozen=True)
