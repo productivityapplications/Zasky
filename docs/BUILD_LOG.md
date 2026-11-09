@@ -445,9 +445,9 @@
 
 ## 2026-11-09 — Post-hackathon presentation polish
 
-- Added a floating scroll-to-top control to the Next.js dashboard. It appears
-  after the page or the task queue scrolls, and resets both the page and queue
-  with reduced-motion support.
+- Added a rail-integrated scroll-to-top control to the Next.js dashboard. It
+  matches the yellow navigation icons and resets both the page and the task
+  queue with reduced-motion support; the floating button was removed.
 - Updated `#zasky-control` so `@everyone` can see the channel but cannot read
   message history, send messages, react, or create threads. The bot retains
   View, Read History and Send.

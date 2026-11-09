@@ -7,6 +7,7 @@ import {
   Sun,
 } from "lucide-react";
 
+import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 import type { Tab } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,11 @@ export function NavigationRail({
       >
         <CalendarDays size={18} strokeWidth={2} />
       </a>
+
+      <div className="mt-auto flex flex-col items-center gap-3">
+        <div className="h-px w-6 bg-black/15" />
+        <ScrollToTopButton />
+      </div>
 
     </aside>
   );

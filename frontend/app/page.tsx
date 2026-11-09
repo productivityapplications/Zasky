@@ -11,7 +11,6 @@ import { AnalyticsDock } from "@/components/AnalyticsDock";
 import { NavigationRail, MobileNav } from "@/components/NavigationRail";
 import { PlanView } from "@/components/PlanView";
 import { ReconciliationView } from "@/components/ReconciliationView";
-import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 import { TaskQueuePanel } from "@/components/TaskQueuePanel";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
 import {
@@ -386,7 +385,6 @@ export default function DashboardPage() {
       </div>
 
       <MobileNav tab={tab} onTab={setTab} />
-      <ScrollToTopButton />
 
       {modal === "goal" ? (
         <GoalModal
