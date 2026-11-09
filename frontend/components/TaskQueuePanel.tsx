@@ -187,7 +187,10 @@ export function TaskQueuePanel({
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1">
+      <div
+        data-task-queue-scroll
+        className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1"
+      >
         {tasks.length ? (
           tasks.map((task, index) => (
             <TaskCard

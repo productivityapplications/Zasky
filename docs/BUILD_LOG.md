@@ -443,6 +443,21 @@
   enable override on an explicit owner command.
 - Tests: **174 passed**; `ruff` clean; `mypy src` clean.
 
+## 2026-11-09 — Post-hackathon presentation polish
+
+- Added a floating scroll-to-top control to the Next.js dashboard. It appears
+  after the page or the task queue scrolls, and resets both the page and queue
+  with reduced-motion support.
+- Updated `#zasky-control` so `@everyone` can see the channel but cannot read
+  message history, send messages, react, or create threads. The bot retains
+  View, Read History and Send.
+- Added `scripts/post_pinned_guides.py` and posted/updated the seven
+  "How it works" embeds. All seven posts succeeded; pinning is blocked by the
+  bot role's missing `Manage Messages` permission (`403`), so the script reports
+  the channel list to rerun after that permission is granted.
+- Frontend production build passes; backend suite remains **174 passed**;
+  `ruff` and `mypy src` clean.
+
 ## Checkpoint template
 
 ```text
