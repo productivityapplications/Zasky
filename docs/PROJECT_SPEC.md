@@ -74,7 +74,7 @@ The following rules are product invariants, not prompt suggestions:
 2. **Week-pool source of truth:** a daily plan may contain only active tasks already placed in the approved week pool. Normal tasks link to a monthly commitment. An ad hoc task may have no month-commitment link only when the owner explicitly flags it as ad hoc; it must still be added to the approved week pool before it can become a day task.
 3. **Proposal before mutation:** planning and reconciliation are proposals. Only a clear owner approval commits their changes.
 4. **One must:** if a day has at least one selected task, exactly one is `must`; all other selected tasks are `should`. Unselected week-pool tasks remain in the pool; `drop` is a daily disposition, not deletion/cancellation.
-5. **Daily ceiling:** no more than three selected tasks per day. Low battery means one must task and at most one additional short/admin task from the existing week pool. The task count is configurable only within the defined product constraint.
+5. **Daily ceiling (default):** no more than three selected tasks per day. Low battery means one must task and at most one additional short/admin task from the existing week pool. The task count is configurable only within the defined product constraint. The owner may explicitly command `override limits` / `ignore the limit` / `schedule all my tasks` to bypass the count cap for that day; override still keeps exactly one must and warns when the day's estimated work exceeds available hours.
 6. **Slack:** week capacity is not planned at 100%. Default `capacity_pct=65`; permitted operator configuration is 60–70%. Remaining time is reserved as slack.
 7. **Fixed events are fixed:** Zasky does not move or cancel fixed events. It places work around them and reports conflicts.
 8. **No silent deadline relief:** when a deadline cannot be met, Zasky marks it at risk and asks the owner to renegotiate; it does not silently extend it.
@@ -92,7 +92,7 @@ The following rules are product invariants, not prompt suggestions:
 - Durable SQLite store and backup/restore procedure.
 - Year goals, monthly commitments, fixed events, weekly placements and concrete week tasks.
 - Seven domain tools exactly: `add_commitment`, `place_week`, `plan_day`, `reconcile`, `park_task`, `complete_task`, `query`.
-- Daily plan built only from approved week tasks; exactly one must when nonempty; maximum three tasks.
+- Daily plan built only from approved week tasks; exactly one must when nonempty; maximum three tasks by default, with an explicit owner `override limits` command for a full-day plan.
 - `backplan` calculations inside `plan_day`, not as an eighth tool.
 - Reconcile proposal with a clear summary of day and week effects.
 - Owner approval/rejection for every plan mutation; deterministic chat command parsing, not an eighth LLM tool.
@@ -210,12 +210,12 @@ Switch addressing configuration is not a substitute for application authorizatio
 
 **Entry:** morning prompt, evening preparation, or owner asks for a date.  
 **Preconditions:** approved week pool for the requested date; fixed events and time configuration loaded.  
-**Steps:** Zasky asks battery (`low`, `medium`, `high`) if not supplied. It reads only active tasks whose `scheduled_date` is the requested date; overdue tasks assigned to earlier dates enter only through an explicit reconcile proposal. It ranks using owner priority, deadlines and pre-existing placement order, and selects up to three. Exactly one selected task is marked must. It schedules around fixed events and transition buffers. Backplan computes earliest required start and latest acceptable wake using morning prep and commute buffers; it may show a compressed alternative if the owner wakes later. It presents the plan and asks for approval.
+**Steps:** Zasky asks battery (`low`, `medium`, `high`) if not supplied. It reads only active tasks whose `scheduled_date` is the requested date; overdue tasks assigned to earlier dates enter only through an explicit reconcile proposal. It ranks using owner priority, deadlines and pre-existing placement order, and selects up to three by default. When the owner explicitly commands an override, it selects every active task for that date instead. Exactly one selected task is marked must. It schedules around fixed events and transition buffers. Backplan computes earliest required start and latest acceptable wake using morning prep and commute buffers; it may show a compressed alternative if the owner wakes later. It presents the plan and asks for approval.
 **State:** draft `pending_proposal`; no day plan mutation before approval. Approval creates `day_plans` + `day_plan_items`, expires/replaces prior pending day plan for same date, and increments day revision.  
-**Validation:** date in an approved week; no more than three items; all task IDs active and in the approved week pool; one must if nonempty; no fixed-event overlap.  
-**Success:** approved schedule, one must, up to two should, latest wake and compressed alternative.  
+**Validation:** date in an approved week; no more than three items by default (all active tasks when `override_limits=true`); all task IDs active and in the approved week pool; one must if nonempty; no fixed-event overlap.  
+**Success:** approved schedule, one must, up to two should by default (all active tasks on override), latest wake and compressed alternative.  
 **Failure:** empty pool → state that no tasks are placed; ask owner to plan week rather than fabricate tasks. Invalid/missing availability → cannot give precise times; offer an unscheduled shortlist and request schedule data.  
-**Edge:** low battery → one must plus at most one short/admin task from the pool; high battery does not increase week capacity; task estimates don't fit → report at risk and propose drops/moves, not arbitrary compression.  
+**Edge:** low battery → one must plus at most one short/admin task from the pool by default; high battery does not increase week capacity; task estimates don't fit → report at risk and propose drops/moves, not arbitrary compression. Override mode schedules all active tasks for the date, keeps one must, and warns if total estimated time exceeds daily available hours.  
 **Permissions:** owner only.  
 **Exit:** approved day plan visible in chat and queryable.
 
@@ -297,8 +297,8 @@ Switch addressing configuration is not a substitute for application authorizatio
 | FR-05 | Weekly placement | Only owner-named task titles can enter week pool; capacity is calculated and approval is required before writes. |
 | FR-06 | Week capacity | Default planning budget is 65% of available work minutes after fixed events/buffers; configured value must be 60–70%; slack is surfaced. |
 | FR-07 | Day pool constraint | Every day-plan item references an active week task assigned to that date/week; no LLM-generated task can bypass this. |
-| FR-08 | One must / three max | A non-empty approved day plan has exactly one must and no more than three selected tasks. |
-| FR-09 | Battery shaping | Low battery results in one must and at most one additional short/admin task; medium/high never exceeds three. |
+| FR-08 | One must / three max by default | A non-empty approved day plan has exactly one must and no more than three selected tasks by default. Explicit `override_limits=true` selects all active tasks for the date while retaining exactly one must. |
+| FR-09 | Battery shaping | Low battery results in one must and at most one additional short/admin task by default; medium/high never exceeds three unless the owner explicitly overrides the limit. |
 | FR-10 | Backplan | Wake time derives only from configured prep/commute buffers and first required start; calculation details are shown and tested. |
 | FR-11 | Reconcile | A disruption creates a proposal from existing week tasks; fixed events remain unchanged; proposal reports week feasibility with arithmetic. |
 | FR-12 | Approval gate | Only exact owner approval of a pending, unexpired, non-stale proposal commits mutations. Ambiguous "okay"/conversation text does not approve. |
@@ -334,7 +334,7 @@ Switch addressing configuration is not a substitute for application authorizatio
 3. Weekly auto-placement (when the owner did not name a date) distributes whole tasks across available dates in the selected week using remaining daily planning capacity, choosing the least-loaded eligible day first; preserve owner-specified dates. Never split a task automatically. If no date can fit the estimate, leave it unplaced and report why.
 4. Previously approved day placements are preserved unless the owner initiates a plan/reconcile.
 5. Fit selected tasks into available slots using estimates and buffers; if they do not fit, do not overlap events or compress estimates without the owner's agreement.
-6. `battery=low` limits the plan to one must and at most one short/admin should selected from the week pool. Medium/high may select up to three.
+6. By default, `battery=low` limits the plan to one must and at most one short/admin should selected from the week pool. Medium/high may select up to three. An explicit owner override schedules all active tasks for that date, keeps one must, and reports a capacity warning if the total exceeds daily available hours.
 7. Exactly one must is assigned whenever at least one item is selected. Other selected items are should. "Drop" is a proposed daily disposition only, not task cancellation.
 
 ### 7.3 Proposal lifecycle

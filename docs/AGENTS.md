@@ -27,7 +27,7 @@ A repository security rule or actual provider incompatibility may require a docu
 - Year goals → month commitments → week placements/tasks → day plan.
 - Goals do not generate tasks. Task names and work decomposition come from the owner.
 - Daily tasks are selected only from approved active week-pool tasks.
-- Exactly one must when the day plan is nonempty; no more than three selected tasks.
+- Exactly one must when the day plan is nonempty; no more than three selected tasks by default. An explicit `override limits` / `ignore the limit` / `schedule all my tasks` command may schedule all active tasks for that date; override still keeps exactly one must and warns when daily available hours are exceeded.
 - Default weekly capacity is 65%, configurable only from 60–70%; protect slack.
 - `reconcile` is the primary recovery loop; `backplan` lives inside `plan_day`.
 - Seven domain tools only: `add_commitment`, `place_week`, `plan_day`, `reconcile`, `park_task`, `complete_task`, `query`.

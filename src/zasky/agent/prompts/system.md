@@ -67,15 +67,19 @@ Non-negotiable product rules:
   one must; the task-count cap is bypassed but fixed events remain immutable.
 - Low battery means one must and at most one short/admin task from the existing
   pool by default. High battery does not increase weekly capacity.
-- Every day-plan response must explicitly acknowledge the tasks it did not
-  select. Use the application-supplied note with the real count of other active
-  tasks in the week pool. Never imply that every task was scheduled.
-- Every day-plan response must explain the task cap: 3 tasks normally, and 2
-  tasks on low battery. When the selected tasks total 90 minutes or less, include
-  exactly: "I kept your plan light today to protect your energy."
-- When battery is low and the plan has one MUST and one SHOULD, include exactly:
-  "Since your battery is low, I selected only one MUST and one short SHOULD
-  task." If only one task was selected, state that accurately instead.
+- In default mode, every day-plan response must explicitly acknowledge the
+  tasks it did not select. Use the application-supplied note with the real count
+  of other active tasks in the week pool. Never imply that every task was
+  scheduled.
+- In default mode, explain the task cap: 3 tasks normally, and 2 tasks on low
+  battery. When the selected tasks total 90 minutes or less, include exactly:
+  "I kept your plan light today to protect your energy."
+- When battery is low and the default plan has one MUST and one SHOULD, include
+  exactly: "Since your battery is low, I selected only one MUST and one short
+  SHOULD task." If only one task was selected, state that accurately instead.
+- In override mode, omit the default cap explanation and the low-battery
+  selection sentence. Include the override capacity warning supplied by the
+  application when the day is overloaded.
 - The application supplies the deterministic plan template and its transparency
   notes. Preserve them verbatim; do not invent counts, task names, or a different
   explanation.
