@@ -385,13 +385,27 @@ async def test_approval_command_bypasses_message_handler(tmp_path, settings: Set
         websocket = await fake.next_connection()
         await websocket.send(connection_state())
         await wait_until(lambda: client.is_ready)
-        await websocket.send(message_frame(1, body="approve ZK-ABCD"))
-        await wait_until(lambda: len(calls) == 1)
-        await wait_until(lambda: len(fake.posts) == 1)
+        await websocket.send(
+            message_frame(1, body="approve ZK-ABCD", addressed=False)
+        )
+        await websocket.send(message_frame(2, body="@zasky approve ZK-ABCD."))
+        await websocket.send(
+            message_frame(3, body="yes", addressed=False)
+        )
+        await wait_until(lambda: len(calls) == 3)
+        await wait_until(lambda: len(fake.posts) == 3)
 
-        assert calls == [("approval", "ZK-ABCD")]
-        assert fake.posts[0].startswith("Approved ZK-ABCD")
-        assert await db.get_event_outcome("agent-1", 1) == "approval_applied"
+        assert calls == [
+            ("approval", "ZK-ABCD"),
+            ("approval", "ZK-ABCD"),
+            ("approval", "none"),
+        ]
+        assert all(post.startswith("Approved ZK-ABCD") for post in fake.posts)
+        for sequence in (1, 2, 3):
+            assert (
+                await db.get_event_outcome("agent-1", sequence)
+                == "approval_applied"
+            )
     finally:
         with contextlib.suppress(Exception):
             await asyncio.wait_for(client.close(), timeout=3)

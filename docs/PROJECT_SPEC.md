@@ -301,7 +301,7 @@ Switch addressing configuration is not a substitute for application authorizatio
 | FR-09 | Battery shaping | Low battery results in one must and at most one additional short/admin task by default; medium/high never exceeds three unless the owner explicitly overrides the limit. |
 | FR-10 | Backplan | Wake time derives only from configured prep/commute buffers and first required start; calculation details are shown and tested. |
 | FR-11 | Reconcile | A disruption creates a proposal from existing week tasks; fixed events remain unchanged; proposal reports week feasibility with arithmetic. |
-| FR-12 | Approval gate | Only exact owner approval of a pending, unexpired, non-stale proposal commits mutations. Ambiguous "okay"/conversation text does not approve. |
+| FR-12 | Approval gate | Exact owner approval (`approve ZK-XXXX`) or an explicit owner conversational approval (`yes`, `do it`, `go ahead`, `looks good`, `lock it in`) commits the targeted proposal or the newest pending proposal. Questions and non-owner messages do not approve. |
 | FR-13 | Park/resume | Park requires a resume note; parked task is excluded from daily planning until resumed. |
 | FR-14 | Complete | Completion is idempotent; completed tasks cannot re-enter active plan. |
 | FR-15 | Query | Query is read-only and all results are derived from stored data. |
@@ -344,7 +344,7 @@ Switch addressing configuration is not a substitute for application authorizatio
 - `record`, `day` and `reconcile` proposals expire after 30 minutes; `week` proposals expire after 24 hours.
 - Create a random human-readable code such as `ZK-4F8Q` (collision checked).
 - Store `scope_key` plus `base_revision` read from `planning_scope_revisions`; for a proposal touching more than one independently versioned scope, store all expected scope/revision pairs in the validated proposal payload.
-- Every committed mutation increments all affected scope revisions in the same transaction. Before approval, require configured owner participant, correct room, exact code (or plain `approve` only when exactly one pending proposal exists), unexpired status, and matching current revision(s).
+- Every committed mutation increments all affected scope revisions in the same transaction. Before approval, require configured owner participant, correct room, the exact code or an explicit conversational approval targeting the newest pending proposal, unexpired status, and matching current revision(s).
 - If the revision changed, mark `stale` and regenerate rather than apply old assumptions.
 - Approval is a database transaction. Repeated approval is idempotent; a second approval reports already resolved.
 - `reject ZK-4F8Q` or an explicit reject action resolves without business-data mutation.
@@ -422,7 +422,7 @@ Tools are internal domain functions exposed to the model with strict JSON schema
 6. **`complete_task`** — `{task_id, actual_min?}`. Owner-only and idempotent.
 7. **`query`** — `{state: today|week|month|goals|deadlines|task|commitment|status, horizon? , entity_id?}`. Read-only and bounded.
 
-**Approval command parser is not an eighth model tool.** `add_commitment` returns an uncommitted `record` proposal just like week/day planning. `place_week`, `plan_day` and `reconcile` also return proposals. `park_task` and `complete_task` are direct only when the owner explicitly requested that exact status action in the current message. The Switch event handler intercepts exact commands (`approve ZK-XXXX`, `reject ZK-XXXX`, `approve`, `reject`) before model invocation, verifies owner+room, resolves the pending proposal deterministically, then posts the outcome. The LLM cannot approve proposals by interpreting conversational tone.
+**Approval command parser is not an eighth model tool.** `add_commitment` returns an uncommitted `record` proposal just like week/day planning. `place_week`, `plan_day` and `reconcile` also return proposals. `park_task` and `complete_task` are direct only when the owner explicitly requested that exact status action in the current message. The Switch event handler intercepts exact commands (`approve ZK-XXXX`, `reject ZK-XXXX`, `approve`, `reject`) and owner conversational approvals (`yes`, `do it`, `go ahead`, `looks good`, `lock it in`, and equivalents) before model invocation, verifies owner+room, resolves the targeted or newest pending proposal deterministically, then posts the outcome. Approval commands may omit an explicit mention in the owner room; other chatter still requires addressing. Questions and non-owner messages do not approve.
 
 ## 9. API and system interface
 

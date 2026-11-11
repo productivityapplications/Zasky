@@ -137,7 +137,7 @@ Goals do not generate tasks. Each step requires owner-authored information or ow
 - Commitment: `active | completed | renegotiated | cancelled`.
 
 ### Approval
-`add_commitment`, `place_week`, `plan_day` and `reconcile` return pending proposals; `park_task`/`complete_task` are immediate only on explicit owner requests. A deterministic parser intercepts exact `approve ZK-XXXX` / `reject ZK-XXXX` messages before LLM use. Plain `approve`/`reject` is accepted only if exactly one pending proposal exists. Check owner, room, code, TTL and revision. Approval is transactional and idempotent. This parser is not an eighth model tool.
+`add_commitment`, `place_week`, `plan_day` and `reconcile` return pending proposals; `park_task`/`complete_task` are immediate only on explicit owner requests. A deterministic parser intercepts exact `approve ZK-XXXX` / `reject ZK-XXXX` messages and owner conversational approvals before LLM use. Code-less `approve`/`reject` and conversational approvals apply or reject the newest pending proposal. Check owner, room, code, TTL and revision. Approval is transactional and idempotent. This parser is not an eighth model tool.
 
 Detailed business rules: `PROJECT_SPEC.md`.
 

@@ -293,6 +293,7 @@ class DomainService:
                 "entity_id": entity_id,
                 "title": request.title.strip(),
                 "priority": request.priority,
+                "priority_provided": "priority" in request.model_fields_set,
                 "status": request.status,
                 "year": request.year,
                 "month": request.month,
@@ -338,6 +339,27 @@ class DomainService:
                 scope = "calendar"
                 await self._validate_fixed_event(session, request, config)
 
+            if request.operation == "update":
+                # A refined draft replaces older drafts for the same entity, so
+                # conversational "yes" always resolves one unambiguous target.
+                pending = (
+                    await session.execute(
+                        select(PendingProposal).where(
+                            PendingProposal.proposal_type == "record",
+                            PendingProposal.status == "pending",
+                        )
+                    )
+                ).scalars().all()
+                resolved_at = _now()
+                for proposal in pending:
+                    document = json.loads(proposal.payload_json)
+                    if (
+                        document.get("entry_type") == request.entry_type
+                        and document.get("entity_id") == entity_id
+                    ):
+                        proposal.status = "stale"
+                        proposal.resolved_at = resolved_at
+                        proposal.resolution_reason = "superseded by newer draft"
             result = await self._make_proposal(
                 session,
                 proposal_type="record",
@@ -543,6 +565,8 @@ class DomainService:
                     )
                 if payload.get("consequence") is not None:
                     commitment.consequence = payload["consequence"]
+                if payload.get("priority_provided") and payload.get("priority"):
+                    commitment.priority = payload["priority"]
                 if payload.get("status") and payload["status"] != commitment.status:
                     commitment.status = payload["status"]
                     if commitment.status == "completed":
@@ -2001,16 +2025,18 @@ class DomainService:
             else:
                 proposals = (
                     await session.execute(
-                        select(PendingProposal).where(
-                            PendingProposal.status == "pending"
-                        )
+                        select(PendingProposal)
+                        .where(PendingProposal.status == "pending")
+                        .order_by(PendingProposal.created_at.desc())
                     )
                 ).scalars().all()
-                if len(proposals) != 1:
+                if not proposals:
                     raise DomainError(
                         "PROPOSAL_NOT_FOUND",
-                        "There is no unique pending proposal to resolve.",
+                        "There is no pending proposal to resolve.",
                     )
+                # Conversational approval applies the newest draft. Exact
+                # `approve ZK-XXXX` still targets a specific code.
                 proposal = proposals[0]
             if proposal is None:
                 raise DomainError("PROPOSAL_NOT_FOUND", "That proposal code does not exist.")

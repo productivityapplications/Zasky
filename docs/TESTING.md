@@ -57,7 +57,7 @@ Test pure domain behavior without Switch or a model:
 - Non-owner sender ID, spoofed display name, wrong room, unaddressed event.
 - Prompt injection asking for system prompt, keys, database, another user's data or arbitrary tool.
 - Forged tool arguments with unknown IDs, invented title, extra fields, oversized string/list, negative minutes.
-- Approval phrase "looks good" and ambiguous "yes" do not approve.
+- Owner conversational approvals ("looks good", "yes", "do it") apply the newest pending proposal; questions such as "should I lock that in?" do not.
 - Expired/stale proposal, wrong code, replayed approval, simultaneous approvals.
 - SQL injection strings treated as data.
 - Oversized messages and rate limit.

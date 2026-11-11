@@ -173,9 +173,10 @@ The deterministic approval command parser remains outside the model.
 Supported commands (sent as a message addressed to Zasky):
 - `approve ZK-4F8Q`
 - `reject ZK-4F8Q`
-- `approve` or `reject` only when exactly one pending proposal exists for this owner and room.
+- `approve` / `reject` with no code, which applies or rejects the newest pending proposal
+- owner conversational approvals: `yes`, `do it`, `go ahead`, `looks good`, `lock it in`, `okay`, `sure`, `perfect`
 
-Parser checks Switch `payload.addressed=true`, owner, room, code, TTL, status and every expected scope revision. Revisions are read from and incremented in `planning_scope_revisions` inside the same transaction as the domain write. No LLM call occurs for a syntactically exact approval/rejection. "Looks good", "fine", "okay" and ambiguous conversational language do not approve. The plain-text message still has to address Zasky according to the room's Switch addressing rules; do not rely on slash-command events or an `addressed`-only filter if it suppresses those commands.
+Parser checks the exact owner and room, code, TTL, status and every expected scope revision. Revisions are read from and incremented in `planning_scope_revisions` inside the same transaction as the domain write. No LLM call occurs for a syntactically exact or recognized conversational approval. Exact codes target that proposal; code-less approvals target the newest pending proposal. Approval commands are accepted without an explicit mention in the owner room; other chatter still requires addressing. Questions such as "should I lock that in?" are not approvals.
 
 ## Private operational endpoints
 

@@ -12,7 +12,7 @@ import uvicorn
 from fastapi import FastAPI
 from sqlalchemy.engine import make_url
 
-from zasky.access.approvals import ApprovalCommand, is_conversational_approval
+from zasky.access.approvals import ApprovalCommand
 from zasky.agent.briefing import BriefingBuilder
 from zasky.agent.context import ContextBuilder
 from zasky.agent.execution import ExecutionSubAgent, ExecutionSubAgentError
@@ -479,18 +479,9 @@ class ZaskyApp:
         )
         if orchestrator is None:
             return "The model is not configured. Nothing changed."
-        domain = sandbox.domain if sandbox is not None else self.domain
         delegations = (
             sandbox.delegations if sandbox is not None else self.delegations
         )
-        if is_conversational_approval(event.data.payload.body):
-            codes = await domain.pending_codes()
-            if codes:
-                code = sorted(codes)[0]
-                return (
-                    "I cannot accept conversational approvals. Please reply with "
-                    f"`approve {code}` to lock this in."
-                )
         delegation_offer = await self._maybe_offer_delegation(
             event.data.payload.body, delegations
         )

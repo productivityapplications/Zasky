@@ -24,7 +24,7 @@ from zasky.domain.schemas import (
 )
 from zasky.domain.service import DomainService
 from zasky.storage.database import Database
-from zasky.storage.models import WeekTask
+from zasky.storage.models import MonthCommitment, PendingProposal, WeekTask
 from zasky.storage.repositories import OwnerConfigRepository
 
 AVAILABILITY = (
@@ -147,6 +147,21 @@ async def test_goal_create_and_approval(domain_env) -> None:
     assert approved["status"] == "approved"
     goals = await service.query(QueryRequest(state="goals", horizon="2027"))
     assert goals["goals"][0]["title"] == "Ship Zasky"
+
+
+@pytest.mark.asyncio
+async def test_conversational_resolution_uses_newest_pending(domain_env) -> None:
+    _db, service, _settings = domain_env
+    await create_goal(service, title="First draft")
+    await create_goal(service, title="Second draft")
+    resolved = await service.resolve_proposal(
+        action="approve", code=None, actor_id=OWNER_ID, room_id=ROOM_ID
+    )
+    assert resolved["status"] == "approved"
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    titles = {goal["title"] for goal in goals["goals"]}
+    assert "Second draft" in titles
+    assert "First draft" not in titles
 
 
 @pytest.mark.asyncio
@@ -418,12 +433,14 @@ async def test_reject_does_not_mutate(domain_env) -> None:
 
 
 @pytest.mark.asyncio
-async def test_approval_parser_is_exact() -> None:
+async def test_approval_parser_supports_exact_and_conversational() -> None:
     from zasky.access.approvals import parse_approval_command
 
     assert parse_approval_command("approve ZK-4F8Q").code == "ZK-4F8Q"
-    assert parse_approval_command("looks good") is None
-    assert parse_approval_command("yes") is None
+    assert parse_approval_command("looks good").action == "approve"
+    assert parse_approval_command("looks good").code is None
+    assert parse_approval_command("yes").action == "approve"
+    assert parse_approval_command("yes").code is None
     assert parse_approval_command("approve").code is None
 
 
@@ -622,6 +639,91 @@ async def test_fixed_event_pushes_work_and_backplan(domain_env) -> None:
 
 
 @pytest.mark.asyncio
+async def test_update_can_leave_estimate_unchanged(domain_env) -> None:
+    _db, service, _settings = domain_env
+    goal = await create_goal(service)
+    await approve(service, goal)
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    commitment = await create_commitment(
+        service, goal_id=goals["goals"][0]["id"], estimate=600
+    )
+    await approve(service, commitment)
+    commitments = await service.query(
+        QueryRequest(state="month", horizon="2027-01")
+    )
+    row = commitments["commitments"][0]
+    assert row["est_total_min"] == 600
+    update = await service.propose_record(
+        AddCommitmentRequest(
+            operation="update",
+            entry_type="month_commitment",
+            entity_id=row["id"],
+            title=row["title"],
+            priority="high",
+        )
+    )
+    await approve(service, update)
+    commitments = await service.query(
+        QueryRequest(state="month", horizon="2027-01")
+    )
+    assert commitments["commitments"][0]["est_total_min"] == 600
+
+
+@pytest.mark.asyncio
+async def test_newer_update_supersedes_older_draft(domain_env) -> None:
+    db, service, _settings = domain_env
+    goal = await create_goal(service)
+    await approve(service, goal)
+    goals = await service.query(QueryRequest(state="goals", horizon="2027"))
+    commitment = await create_commitment(
+        service, goal_id=goals["goals"][0]["id"]
+    )
+    await approve(service, commitment)
+    commitments = await service.query(
+        QueryRequest(state="month", horizon="2027-01")
+    )
+    row = commitments["commitments"][0]
+    first = await service.propose_record(
+        AddCommitmentRequest(
+            operation="update",
+            entry_type="month_commitment",
+            entity_id=row["id"],
+            title=row["title"],
+            priority="high",
+        )
+    )
+    second = await service.propose_record(
+        AddCommitmentRequest(
+            operation="update",
+            entry_type="month_commitment",
+            entity_id=row["id"],
+            title=row["title"],
+            priority="low",
+        )
+    )
+    async with db.locked_session() as session:
+        first_row = await session.scalar(
+            select(PendingProposal).where(
+                PendingProposal.code == first["proposal"]
+            )
+        )
+        second_row = await session.scalar(
+            select(PendingProposal).where(
+                PendingProposal.code == second["proposal"]
+            )
+        )
+        assert first_row is not None and first_row.status == "stale"
+        assert second_row is not None and second_row.status == "pending"
+    resolved = await service.resolve_proposal(
+        action="approve", code=None, actor_id=OWNER_ID, room_id=ROOM_ID
+    )
+    assert resolved["proposal"] == second["proposal"]
+    async with db.locked_session() as session:
+        applied = await session.get(MonthCommitment, row["id"])
+        assert applied is not None and applied.priority == "low"
+
+
+@pytest.mark.asyncio
 async def test_commitment_cancellation_cancels_tasks(domain_env) -> None:
     db, service, _settings = domain_env
     goal = await create_goal(service)
@@ -652,29 +754,23 @@ async def test_commitment_cancellation_cancels_tasks(domain_env) -> None:
 
 
 @pytest.mark.asyncio
-async def test_approval_without_code_requires_exactly_one_pending(domain_env) -> None:
+async def test_approval_without_code_uses_newest_pending(domain_env) -> None:
     _db, service, _settings = domain_env
     first = await create_goal(service, title="First")
-    await create_goal(service, title="Second")
-    with pytest.raises(DomainError) as exc:
-        await service.resolve_proposal(
-            action="approve", code=None, actor_id=OWNER_ID, room_id=ROOM_ID
-        )
-    assert exc.value.code == "PROPOSAL_NOT_FOUND"
+    second = await create_goal(service, title="Second")
     approved = await service.resolve_proposal(
-        action="approve",
-        code=first["proposal"],
-        actor_id=OWNER_ID,
-        room_id=ROOM_ID,
+        action="approve", code=None, actor_id=OWNER_ID, room_id=ROOM_ID
     )
     assert approved["status"] == "approved"
-    again = await service.resolve_proposal(
-        action="approve",
-        code=first["proposal"],
-        actor_id=OWNER_ID,
-        room_id=ROOM_ID,
-    )
-    assert again["already"] == "approved"
+    assert approved["proposal"] == second["proposal"]
+    with pytest.raises(DomainError) as exc:
+        await service.resolve_proposal(
+            action="approve",
+            code=first["proposal"],
+            actor_id=OWNER_ID,
+            room_id=ROOM_ID,
+        )
+    assert exc.value.code == "PROPOSAL_STALE"
 
 
 @pytest.mark.asyncio

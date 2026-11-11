@@ -91,10 +91,10 @@ These are layout examples, not fabricated state. The system fills them from actu
 - Plan/reconcile proposal text is rendered from the tool payload, not the
   model's calendar reasoning, so dates, local times, task titles and codes are
   exact.
-- Short conversational approvals ("looks good", "lock that in", "go ahead")
-  are intercepted by the app when a proposal is pending. They never commit.
-  The reply is: "I cannot accept conversational approvals. Please reply with
-  `approve ZK-XXXX` to lock this in."
+- Short conversational approvals ("looks good", "lock that in", "go ahead",
+  "yes") are intercepted by the app when a proposal is pending. They apply the
+  newest pending proposal deterministically. Exact `approve ZK-XXXX` still
+  targets a specific code and remains the fallback.
 
 ## Discord formatting (2026-11-06)
 

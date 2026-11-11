@@ -58,6 +58,14 @@ def test_unaddressed_event_is_rejected(settings: Settings) -> None:
     assert decision.reason == "not_addressed"
 
 
+def test_unaddressed_owner_approval_is_allowed(settings: Settings) -> None:
+    for body in ("approve ZK-4F8Q", "yes", "looks good", "lock it in"):
+        decision = authorize_message(
+            make_event(addressed=False, body=body), settings
+        )
+        assert decision.allowed is True
+
+
 def test_empty_body_is_rejected(settings: Settings) -> None:
     decision = authorize_message(make_event(body="   "), settings)
     assert decision.allowed is False

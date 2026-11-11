@@ -31,7 +31,7 @@ A repository security rule or actual provider incompatibility may require a docu
 - Default weekly capacity is 65%, configurable only from 60–70%; protect slack.
 - `reconcile` is the primary recovery loop; `backplan` lives inside `plan_day`.
 - Seven domain tools only: `add_commitment`, `place_week`, `plan_day`, `reconcile`, `park_task`, `complete_task`, `query`.
-- Record, week-placement, day-plan and reconcile changes are proposals; exact owner approval is required. `park_task` and `complete_task` are immediate only when the owner explicitly requests that exact status change.
+- Record, week-placement, day-plan and reconcile changes are proposals; exact owner approval or an explicit owner conversational approval is required. `park_task` and `complete_task` are immediate only when the owner explicitly requests that exact status change.
 - Fixed events are immutable. Week feasibility must use deterministic arithmetic.
 - No task invention, guilt, streaks, dashboard, website, frontend or payment features in MVP.
 

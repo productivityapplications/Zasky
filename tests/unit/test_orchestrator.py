@@ -10,7 +10,7 @@ from pydantic import SecretStr
 
 from tests.fixtures.identities import OWNER_ID, ROOM_ID
 from zasky.agent.context import ContextBuilder
-from zasky.agent.orchestrator import AgentOrchestrator
+from zasky.agent.orchestrator import COMMITMENT_INTRO_RESPONSE, AgentOrchestrator
 from zasky.config import Settings
 from zasky.domain.service import DomainService
 from zasky.integrations.openrouter.client import LLMError, LLMResponse, ToolCall
@@ -325,11 +325,39 @@ def test_prompt_has_conversational_approval_guard() -> None:
     from zasky.agent.orchestrator import load_system_prompt
 
     prompt = load_system_prompt()
-    assert "I cannot accept conversational approvals" in prompt
+    assert "conversational approvals" in prompt
+    assert "newest pending proposal" in prompt
     assert "call `plan_day`" in prompt
     assert "Never calculate the calendar date yourself" in prompt
     assert "protective assistant by default" in prompt
     assert "override_limits=true" in prompt
+
+
+def test_record_template_is_compact_and_conversational() -> None:
+    from zasky.agent.orchestrator import AgentOrchestrator
+
+    detail = AgentOrchestrator._proposal_detail(
+        "add_commitment",
+        {
+            "proposal": "ZK-5HLB",
+            "payload": {
+                "operation": "update",
+                "entry_type": "month_commitment",
+                "title": "Finish all hackathons this month",
+                "priority": "high",
+                "deadline_local_date": "2026-11-30",
+                "est_min": None,
+                "consequence": "More work piles up in December.",
+            },
+        },
+    )
+    assert "📝 **Updated commitment draft**" in detail
+    assert "**Title:** Finish all hackathons this month" in detail
+    assert "**Priority:** High" in detail
+    assert "**Deadline:** Mon, Nov 30" in detail
+    assert "**Estimate:** unchanged" in detail
+    assert '*Is this better? Reply "yes" to lock it in.*' in detail
+    assert "**Proposal Code:** `ZK-5HLB`" in detail
 
 
 def test_plan_day_template_is_discord_ready() -> None:
@@ -363,7 +391,7 @@ def test_plan_day_template_is_discord_ready() -> None:
     assert "**SHOULD DO:**\n- ✅ **Capture the recovery transcript** (60 min)" in detail
     assert "⏰ **Latest Wake Time:** 07:30 AM" in detail
     assert "**Proposal Code:** `ZK-4F8Q`" in detail
-    assert "*Reply with `approve ZK-4F8Q` to lock this in.*" in detail
+    assert '*Reply "yes" to lock this in, or use `approve ZK-4F8Q`.*' in detail
     assert "\n\n**SHOULD DO:**" in detail
 
 
@@ -630,6 +658,32 @@ def test_plan_day_template_omits_transparency_note_when_pool_is_empty() -> None:
     assert "battery is low" not in detail
 
 
+def test_add_commitment_intro_asks_naturally() -> None:
+    from zasky.agent.orchestrator import (
+        COMMITMENT_INTRO_RESPONSE,
+        AgentOrchestrator,
+    )
+
+    assert (
+        AgentOrchestrator._commitment_intro_response(
+            "I want to add a commitment"
+        )
+        == COMMITMENT_INTRO_RESPONSE
+    )
+    assert (
+        AgentOrchestrator._commitment_intro_response(
+            "create a new commitment"
+        )
+        == COMMITMENT_INTRO_RESPONSE
+    )
+    assert (
+        AgentOrchestrator._commitment_intro_response(
+            "I want to add a commitment to finish all hackathons by December"
+        )
+        is None
+    )
+
+
 @pytest.mark.asyncio
 async def test_battery_clarification_explains_without_model(orchestrator_env) -> None:
     db, settings = orchestrator_env
@@ -657,6 +711,22 @@ async def test_battery_clarification_explains_without_model(orchestrator_env) ->
         "Battery refers to your energy level. I use it to decide how many tasks "
         "to schedule. Please reply with low, medium, or high."
     )
+    assert llm.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_add_commitment_intro_does_not_call_model(orchestrator_env) -> None:
+    db, settings = orchestrator_env
+    llm = FakeLLM()  # no response should be consumed
+    orch = AgentOrchestrator(
+        settings,
+        DomainService(db, settings),
+        llm,  # type: ignore[arg-type]
+        ContextBuilder(db, settings),
+        CostGuard(db, settings),
+    )
+    reply = await orch.handle_message(event("I want to add a commitment"))
+    assert reply == COMMITMENT_INTRO_RESPONSE
     assert llm.calls == 0
 
 

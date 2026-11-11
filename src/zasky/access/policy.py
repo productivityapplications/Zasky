@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from zasky.access.approvals import parse_approval_command
 from zasky.config import Settings
 from zasky.switch.events import MessageEvent
 
@@ -30,10 +31,16 @@ def authorize_message(event: MessageEvent, settings: Settings) -> AccessDecision
         return AccessDecision(False, "room_not_allowed")
 
     if not is_sandbox:
-        if not payload.addressed:
-            return AccessDecision(False, "not_addressed")
         if payload.sender != settings.owner_switch_participant_id:
             return AccessDecision(False, "sender_not_owner")
+        # Exact and conversational approvals are valid owner commands even when
+        # Discord does not mark the message as addressed. Other room chatter
+        # still needs an explicit mention.
+        if (
+            not payload.addressed
+            and parse_approval_command(payload.body) is None
+        ):
+            return AccessDecision(False, "not_addressed")
     else:
         # The sandbox is a public judge surface. Discord mention translation is
         # unreliable across bridges, so any human message in this exact room is

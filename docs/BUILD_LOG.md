@@ -458,6 +458,26 @@
 - Frontend production build passes; backend suite remains **174 passed**;
   `ruff` and `mypy src` clean.
 
+## 2026-11-11 — Conversational approvals and intent handling
+
+- Fixed the approval loop: exact codes now survive leading Discord mentions,
+  backticks/bold formatting and trailing punctuation. Unaddressed owner
+  approvals are accepted in the private owner room; other chatter still needs
+  addressing.
+- Conversational owner approvals (`yes`, `do it`, `go ahead`, `looks good`,
+  `lock it in`, `okay`, `sure`) deterministically apply the newest pending
+  proposal. Exact `approve ZK-XXXX` still targets a specific code.
+- Code-less resolution now selects the newest pending proposal instead of
+  requiring exactly one. New record-update drafts supersede older drafts for the
+  same entity.
+- Added a compact deterministic record-proposal template and removed the strict
+  "I cannot accept conversational approvals" guard. Commitment updates can omit
+  `est_min` to preserve the existing estimate; explicit priority changes now
+  apply.
+- Added a deterministic "I want to add a commitment" opener and prompt guidance
+  for natural commitment capture and short replies.
+- Tests: backend suite expanded and re-run; `ruff` and `mypy` clean.
+
 ## Checkpoint template
 
 ```text

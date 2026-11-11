@@ -56,6 +56,14 @@ HELPFUL_FALLBACK = (
     "I didn't understand that. If you are trying to plan your day, try: "
     "'@zasky What is my plan for tomorrow? Battery medium'."
 )
+_ADD_COMMITMENT_INTRO_RE = re.compile(
+    r"^(?:i\s+(?:want|need|would\s+like|'d\s+like)\s+to\s+)?"
+    r"(?:add|create|make)\s+(?:a\s+|an\s+)?(?:new\s+)?commitment[.!]*$",
+    re.IGNORECASE,
+)
+COMMITMENT_INTRO_RESPONSE = (
+    "Awesome — what's the commitment you want to make? Nothing has changed yet."
+)
 
 
 def load_system_prompt() -> str:
@@ -82,6 +90,9 @@ class AgentOrchestrator:
 
     async def handle_message(self, event: MessageEvent) -> str:
         text = event.data.payload.body.strip()
+        intro = self._commitment_intro_response(text)
+        if intro is not None:
+            return intro
         correlation_id = uuid.uuid4().hex
         try:
             await self._cost.check()
@@ -386,6 +397,13 @@ class AgentOrchestrator:
         return arguments
 
     @staticmethod
+    def _commitment_intro_response(text: str) -> str | None:
+        normalized = " ".join(text.strip().split())
+        if _ADD_COMMITMENT_INTRO_RE.fullmatch(normalized):
+            return COMMITMENT_INTRO_RESPONSE
+        return None
+
+    @staticmethod
     def _is_battery_clarification(
         text: str, recent_messages: list[dict[str, Any]]
     ) -> bool:
@@ -587,7 +605,7 @@ class AgentOrchestrator:
         return (
             "---\n"
             f"**Proposal Code:** `{code}`\n"
-            f"*Reply with `approve {code}` to lock this in.*\n"
+            f'*Reply "yes" to lock this in, or use `approve {code}`.*\n'
             "---"
         )
 
@@ -597,6 +615,68 @@ class AgentOrchestrator:
         code = result.get("proposal")
         if not isinstance(payload, dict) or not isinstance(code, str):
             return ""
+        if tool == "add_commitment":
+            entry_type = str(payload.get("entry_type") or "")
+            operation = str(payload.get("operation") or "create")
+            updated = operation == "update"
+            labels = {
+                "month_commitment": "commitment",
+                "year_goal": "goal",
+                "fixed_event": "fixed event",
+            }
+            if entry_type not in labels:
+                return ""
+            lines = [
+                f"📝 **{'Updated' if updated else 'New'} {labels[entry_type]} draft**",
+                "",
+                f"**Title:** {cls._escape_md(str(payload.get('title', 'Untitled')))}",
+            ]
+            if entry_type == "month_commitment":
+                lines.append(
+                    f"**Priority:** {str(payload.get('priority', 'normal')).title()}"
+                )
+                if payload.get("deadline_local_date"):
+                    lines.append(
+                        f"**Deadline:** {cls._short_date(payload['deadline_local_date'])}"
+                    )
+                if payload.get("est_min") is not None:
+                    lines.append(f"**Estimate:** {payload['est_min']} min")
+                elif updated:
+                    lines.append("**Estimate:** unchanged")
+                if payload.get("consequence"):
+                    lines.append(
+                        f"**Why it matters:** "
+                        f"{cls._escape_md(str(payload['consequence']))}"
+                    )
+            elif entry_type == "year_goal":
+                lines.append(f"**Year:** {payload.get('year', '')}")
+                if payload.get("evidence_of_done"):
+                    lines.append(
+                        f"**Evidence of done:** "
+                        f"{cls._escape_md(str(payload['evidence_of_done']))}"
+                    )
+            else:
+                if payload.get("starts_at"):
+                    lines.append(
+                        f"**Starts:** {str(payload['starts_at'])[:16].replace('T', ' ')}"
+                    )
+                if payload.get("ends_at"):
+                    lines.append(
+                        f"**Ends:** {str(payload['ends_at'])[:16].replace('T', ' ')}"
+                    )
+            lines.extend(
+                [
+                    "",
+                    (
+                        '*Is this better? Reply "yes" to lock it in.*'
+                        if updated
+                        else '*Does this look right? Reply "yes" to lock it in.*'
+                    ),
+                    "",
+                    cls._proposal_footer(code),
+                ]
+            )
+            return "\n".join(lines)
         if tool == "plan_day":
             items = [item for item in payload.get("items", []) if isinstance(item, dict)]
             must = [item for item in items if item.get("disposition") == "must"]
