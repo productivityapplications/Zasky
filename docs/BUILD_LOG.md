@@ -461,9 +461,10 @@
 ## 2026-11-11 — Conversational approvals and intent handling
 
 - Fixed the approval loop: exact codes now survive leading Discord mentions,
-  backticks/bold formatting and trailing punctuation. Unaddressed owner
-  approvals are accepted in the private owner room; other chatter still needs
-  addressing.
+  backticks/bold formatting and trailing punctuation. The main Switch
+  subscription now uses `filter=all` so unaddressed `approve ZK-XXXX` messages
+  are delivered; the access gate accepts them in the private owner room while
+  still ignoring ordinary unaddressed chatter.
 - Conversational owner approvals (`yes`, `do it`, `go ahead`, `looks good`,
   `lock it in`, `okay`, `sure`) deterministically apply the newest pending
   proposal. Exact `approve ZK-XXXX` still targets a specific code.

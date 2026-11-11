@@ -233,10 +233,10 @@ class SwitchClient:
         ):
             rooms.append(self._settings.sandbox_switch_room_id)
         query["rooms"] = ",".join(rooms)
-        # The sandbox accepts ordinary judge messages even when Discord does not
-        # translate the mention into an addressed flag. Strict owner checks still
-        # apply in the main room.
-        query["filter"] = "all" if self._settings.sandbox_switch_room_id else "addressed"
+        # Receive all room messages so unaddressed owner approvals still reach
+        # the deterministic parser. The access gate continues to require an
+        # explicit mention for ordinary chatter in the main room.
+        query["filter"] = "all"
         if self._highest_processed > 0:
             query["start_from"] = str(self._highest_processed)
         if self._generation is not None:

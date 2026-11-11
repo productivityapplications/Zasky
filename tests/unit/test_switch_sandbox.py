@@ -49,6 +49,18 @@ def sandbox_event(room_id: str = SANDBOX_ROOM) -> MessageEvent:
     )
 
 
+def test_main_subscription_uses_all_filter(settings: Settings) -> None:
+    client = SwitchClient(
+        settings,
+        SimpleNamespace(),  # type: ignore[arg-type]
+        FakeOps(),  # type: ignore[arg-type]
+    )
+    uri = client._build_uri()
+    query = parse_qs(urlparse(uri).query)
+    assert query["filter"] == ["all"]
+    assert query["rooms"] == [settings.switch_room_id]
+
+
 def test_sandbox_subscription_uses_all_filter(settings: Settings) -> None:
     configured = settings.model_copy(
         update={"sandbox_switch_room_id": SANDBOX_ROOM}

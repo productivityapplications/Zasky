@@ -408,7 +408,7 @@ The registration response includes `id` and `api_key`. Capture the returned runt
 
 - The first frame is `connection_state`; take rooms/cursor/generation/protocol and heartbeat interval from this frame.
 - A `message` payload includes `addressed`, `sender`, `message_id`, `body`, timestamp and optional thread/attachment details.
-- Process a message only when its room is allowed, sender is the owner and `addressed=true`.
+- Process a message only when its room is allowed and the sender is the owner. Ordinary chatter must be `addressed=true`; exact or conversational approval commands are accepted without an explicit mention in the owner room.
 - Event frame `id` is a numeric sequence; persist the highest successfully processed sequence.
 - Answer ping control frames immediately with pong containing the highest processed sequence.
 - On a gap, reread room context before responding.

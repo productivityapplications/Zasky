@@ -123,8 +123,8 @@ Use the current Switch WebSocket agent connection protocol, not legacy SSE.
 - A `gap` control frame means continuity cannot be assumed: take the server-provided resume position, attach the gap marker to the next surfaced event, and reread room history before responding. Do not process historical context as a fresh command.
 - A Switch `evicted` control frame with code `taken_over` is terminal for that connection: stop reconnecting from the displaced instance. Other close/eviction codes require their documented, bounded recovery behavior.
 - Enforce one active Zasky writer for the room. Use a host-level singleton/lock plus database lease/instance guard; never allow two app instances to process writes simultaneously. Deployment must stop the old writer before the new one opens a room-claiming connection, because opening another connection can take over the existing room claim.
-- Process only `message` events directed/addressed to this agent and allowed room (`payload.addressed=true`); treat slash/room `command` events as unsupported in MVP. The approval text is an ordinary owner message addressed to Zasky, not a Switch slash command.
-- Prefer the `addressed` event filter if compatible with the deployed protocol; remember it intentionally excludes `command` events, which MVP does not use. Confirm event envelope/field paths at intake.
+- Process only `message` events in the allowed room with the exact owner sender. Ordinary chatter must be addressed (`payload.addressed=true`); exact and conversational approval commands are accepted without an explicit mention in the private owner room. Treat slash/room `command` events as unsupported in MVP. Approval text is an ordinary owner message, not a Switch slash command.
+- Subscribe with `filter=all` for the owner room so unaddressed approvals are delivered, then enforce addressing in the application access gate for ordinary chatter. Confirm event envelope/field paths at intake.
 - Treat sender IDs as opaque identifiers. Compare exact strings; do not parse or derive identity from them.
 
 ### 3.3 Switch operations
@@ -287,7 +287,7 @@ For every event, all must pass:
 1. valid Switch authenticated connection/event;
 2. exact configured room ID;
 3. exact configured owner participant ID as sender;
-4. addressed to this agent under current protocol (`payload.addressed=true`); approval messages must also be addressed to Zasky, even though they bypass the LLM;
+4. addressed to this agent under current protocol (`payload.addressed=true`) for ordinary chatter; exact and conversational approval commands may be unaddressed in the private owner room, even though they bypass the LLM;
 5. event has not already been processed;
 6. sender/event is not over per-owner rate limit.
 
