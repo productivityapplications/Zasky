@@ -176,7 +176,7 @@ Supported commands (sent as a message addressed to Zasky):
 - `approve` / `reject` with no code, which applies or rejects the newest pending proposal
 - owner conversational approvals: `yes`, `do it`, `go ahead`, `looks good`, `lock it in`, `okay`, `sure`, `perfect`
 
-Parser checks the exact owner and room, code, TTL, status and every expected scope revision. Revisions are read from and incremented in `planning_scope_revisions` inside the same transaction as the domain write. No LLM call occurs for a syntactically exact or recognized conversational approval. Exact codes target that proposal; code-less approvals target the newest pending proposal. Approval commands are accepted without an explicit mention in the owner room; other chatter still requires addressing. Questions such as "should I lock that in?" are not approvals.
+Parser checks the exact owner and room, code, TTL, status and every expected scope revision. Revisions are read from and incremented in `planning_scope_revisions` inside the same transaction as the domain write. No LLM call occurs for a syntactically exact or recognized conversational approval. Exact codes target that proposal; code-less approvals target the newest pending proposal. The private owner room accepts owner messages without an explicit mention; the sandbox accepts judge messages. Questions such as "should I lock that in?" are not approvals.
 
 ## Private operational endpoints
 
@@ -408,7 +408,7 @@ The registration response includes `id` and `api_key`. Capture the returned runt
 
 - The first frame is `connection_state`; take rooms/cursor/generation/protocol and heartbeat interval from this frame.
 - A `message` payload includes `addressed`, `sender`, `message_id`, `body`, timestamp and optional thread/attachment details.
-- Process a message only when its room is allowed and the sender is the owner. Ordinary chatter must be `addressed=true`; exact or conversational approval commands are accepted without an explicit mention in the owner room.
+- Process a message only when its room is allowed and the sender is the owner. The private owner room accepts natural owner messages without an explicit mention; `addressed` is retained as metadata for compatibility.
 - Event frame `id` is a numeric sequence; persist the highest successfully processed sequence.
 - Answer ping control frames immediately with pong containing the highest processed sequence.
 - On a gap, reread room context before responding.

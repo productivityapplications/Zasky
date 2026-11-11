@@ -52,10 +52,10 @@ def test_wrong_sender_is_rejected(settings: Settings) -> None:
     assert decision.reason == "sender_not_owner"
 
 
-def test_unaddressed_event_is_rejected(settings: Settings) -> None:
+def test_unaddressed_owner_message_is_allowed(settings: Settings) -> None:
     decision = authorize_message(make_event(addressed=False), settings)
-    assert decision.allowed is False
-    assert decision.reason == "not_addressed"
+    assert decision.allowed is True
+    assert decision.reason == "ok"
 
 
 def test_unaddressed_owner_approval_is_allowed(settings: Settings) -> None:

@@ -231,7 +231,7 @@ async def test_owner_message_gets_one_echo_and_duplicate_is_ignored(
 
 
 @pytest.mark.asyncio
-async def test_wrong_room_sender_and_unaddressed_are_ignored(
+async def test_wrong_room_and_sender_are_ignored(
     harness: tuple[FakeSwitchServer, SwitchClient, Database, asyncio.Task[None]],
 ) -> None:
     fake, client, db, _task = harness
@@ -241,17 +241,30 @@ async def test_wrong_room_sender_and_unaddressed_are_ignored(
 
     await websocket.send(message_frame(1, room_id="other-room"))
     await websocket.send(message_frame(2, sender="@stranger:test"))
-    await websocket.send(message_frame(3, addressed=False))
 
-    async def all_ignored() -> bool:
+    async def both_ignored() -> bool:
         outcomes = [
             await db.get_event_outcome("agent-1", sequence)
-            for sequence in (1, 2, 3)
+            for sequence in (1, 2)
         ]
-        return outcomes == ["ignored", "ignored", "ignored"]
+        return outcomes == ["ignored", "ignored"]
 
-    await wait_until_async(all_ignored)
+    await wait_until_async(both_ignored)
     assert fake.posts == []
+
+
+@pytest.mark.asyncio
+async def test_unaddressed_owner_message_is_processed(
+    harness: tuple[FakeSwitchServer, SwitchClient, Database, asyncio.Task[None]],
+) -> None:
+    fake, client, db, _task = harness
+    websocket = await fake.next_connection()
+    await websocket.send(connection_state())
+    await wait_until(lambda: client.is_ready)
+
+    await websocket.send(message_frame(1, addressed=False, body="hello"))
+    await wait_until(lambda: len(fake.posts) == 1)
+    assert fake.posts[0] == "Zasky is connected. Phase 1 echo received (5 characters)."
 
 
 @pytest.mark.asyncio
